@@ -231,6 +231,8 @@ class WPAS_Ticket_Post_Type {
 			'queued'     => _x( 'New', 'Ticket status', 'wpas' ),
 			'processing' => _x( 'In Progress', 'Ticket status', 'wpas' ),
 			'hold'       => _x( 'On Hold', 'Ticket status', 'wpas' ),
+			'wait_customer'       => _x( 'Waiting for customer reply', 'Ticket status', 'wpas' ),
+			'wait_support'       => _x( 'Waiting for support reply', 'Ticket status', 'wpas' ),
 		);
 
 		return apply_filters( 'wpas_ticket_statuses', $status );
