@@ -3,7 +3,7 @@ add_shortcode( 'tickets', 'wpas_sc_client_account' );
 /**
  * Registration page shortcode.
  */
-function wpas_sc_client_account() {
+function wpas_sc_client_account($atts) {
 
 	global $wpas_tickets, $current_user, $post;
 
@@ -17,10 +17,10 @@ function wpas_sc_client_account() {
 	 */
 	$author = ( 0 !== $current_user->ID ) ? $current_user->ID : -1;
 
-	$args = array(
+	$args =shortcode_atts( array(
 		'author'                 => $author,
 		'post_type'              => 'ticket',
-		'post_status'            => 'any',
+		'post_status'            => 'all',
 		'order'                  => 'DESC',
 		'orderby'                => 'date',
 		'posts_per_page'         => -1,
@@ -28,8 +28,21 @@ function wpas_sc_client_account() {
 		'cache_results'          => false,
 		'update_post_term_cache' => false,
 		'update_post_meta_cache' => false,
+		'ticketstatus'           => false,
+		'registrationform'       => false,
 		
-	);
+	),$atts);
+	if($args['ticketstatus']){
+		$args['meta_query']=array(
+				array(
+					'key' => '_wpas_status',
+					'value' => $args['ticketstatus'],
+					)
+			
+		);
+		unset($args['ticketstatus']);
+
+	}
 
 	$wpas_tickets = new WP_Query( $args );		
 
