@@ -26,17 +26,31 @@ function wpas_register_account( $data = false ) {
 		$data = $_POST;
 	}
 
-	$email      = isset( $data['email'] ) && ! empty( $data['email'] ) ? sanitize_email( $data['email'] ) : false;
-	$first_name = isset( $data['first_name'] ) && ! empty( $data['first_name'] ) ? sanitize_text_field( $data['first_name'] ) : false;
-	$last_name  = isset( $data['last_name'] ) && ! empty( $data['last_name'] ) ? sanitize_text_field( $data['last_name'] ) : false;
-	$pwd        = isset( $data['pwd'] ) && ! empty( $data['pwd'] ) ? $data['pwd'] : false;
+	$email      = isset( $data['wpas_email'] ) && ! empty( $data['wpas_email'] ) ? sanitize_email( $data['wpas_email'] ) : false;
+	$first_name = isset( $data['wpas_first_name'] ) && ! empty( $data['wpas_first_name'] ) ? sanitize_text_field( $data['wpas_first_name'] ) : false;
+	$last_name  = isset( $data['wpas_last_name'] ) && ! empty( $data['wpas_last_name'] ) ? sanitize_text_field( $data['wpas_last_name'] ) : false;
+	$pwd        = isset( $data['wpas_password'] ) && ! empty( $data['wpas_password'] ) ? $data['wpas_password'] : false;
 
-	/* Save the user information in session to pre populate the form in case of error. */
-	$_SESSION['wpas_registration_form'] = array(
-		'first_name' => $first_name,
-		'last_name'  => $last_name,
-		'email'      => $email,
-	);
+	/**
+	 * Give a chance to third-parties to add new checks to the account registration process
+	 *
+	 * @since 3.2.0
+	 * @var bool|WP_Error
+	 */
+	$errors = apply_filters( 'wpas_register_account_errors', false, $first_name, $last_name, $email );
+
+	if ( false !== $errors ) {
+
+		$notice = implode( '\n\r', $errors->get_error_messages() );
+
+		wp_redirect( add_query_arg( array(
+			'message' => wpas_create_notification( $notice ),
+			get_permalink( $post->ID )
+		) ) );
+
+		exit;
+
+	}
 
 	/**
 	 * wpas_pre_register_account hook
@@ -136,7 +150,9 @@ function wpas_register_account( $data = false ) {
 		/* Delete the user information data from session. */
 		unset( $_SESSION['wpas_registration_form'] );
 
+		if ( true === apply_filters( 'wpas_new_user_notification', true ) ) {
 		wp_new_user_notification( $user_id, $pwd );
+		}
 
 		if ( headers_sent() ) {
 			wp_redirect( add_query_arg( array(
@@ -161,30 +177,6 @@ function wpas_register_account( $data = false ) {
 }
 
 /**
- * Get temporary user data.
- *
- * If the user registration fails some of the user data is saved
- * (all except the password) and can be used to pre-populate the registration
- * form after the page reloads. This function returns the desired field value
- * if any.
- *
- * @since  3.0.0
- *
- * @param  string $field Name of the field to get the value for
- *
- * @return string        The sanitized field value if any, an empty string otherwise
- */
-function wpas_get_registration_field_value( $field ) {
-
-	if ( isset( $_SESSION ) && isset( $_SESSION['wpas_registration_form'][ $field ] ) ) {
-		return sanitize_text_field( $_SESSION['wpas_registration_form'][ $field ] );
-	} else {
-		return '';
-	}
-
-}
-
-/**
  * Try to log the user in.
  *
  * If credentials are passed through the POST data
@@ -197,9 +189,33 @@ function wpas_try_login() {
 	/**
 	 * Try to log the user if credentials are submitted.
 	 */
-	if ( isset( $_POST['log'] ) ) {
+	if ( isset( $_POST['wpas_log'] ) ) {
 
-		$login = wp_signon();
+		$credentials = array(
+			'user_login' => $_POST['wpas_log'],
+		);
+
+		if ( isset( $_POST['rememberme'] ) ) {
+			$credentials['remember'] = true;
+		}
+
+		$credentials['user_password'] = isset( $_POST['wpas_pwd'] ) ? $_POST['wpas_pwd'] : '';
+
+		/**
+		 * Give a chance to third-parties to add new checks to the login process
+		 *
+		 * @since 3.2.0
+		 * @var bool|WP_Error
+		 */
+		$login = apply_filters( 'wpas_try_login', false );
+
+		if ( is_wp_error( $login ) ) {
+			$error = $login->get_error_message();
+			wp_redirect( add_query_arg( array( 'message' => urlencode( base64_encode( json_encode( $error ) ) ) ), get_permalink( $post->ID ) ) );
+			exit;
+		}
+
+		$login = wp_signon( $credentials );
 
 		if ( is_wp_error( $login ) ) {
 			$error = $login->get_error_message();
@@ -228,27 +244,24 @@ function wpas_try_login() {
  */
 function wpas_can_view_ticket( $post_id ) {
 
-	/* Only logged in users can view */
-	if ( ! is_user_logged_in() ) {
-		return false;
-	}
+	/**
+	 * Set the return value to false by default to avoid giving unwanted access.
+	 */
+	$can = false;
 
-	if ( ! current_user_can( 'view_ticket' ) ) {
-		return false;
-	}
-
+	/**
+	 * Get the post data.
+	 */
 	$post      = get_post( $post_id );
 	$author_id = intval( $post->post_author );
 
-	if ( get_current_user_id() === $author_id ) {
-		return true;
+	if ( is_user_logged_in() ) {
+		if ( get_current_user_id() === $author_id && current_user_can( 'view_ticket' ) || current_user_can( 'edit_ticket' ) ) {
+			$can = true;
+	}
 	}
 
-	if ( current_user_can( 'edit_ticket' ) ) {
-		return true;
-	}
-
-	return false;
+	return apply_filters( 'wpas_can_view_ticket', $can, $post_id, $author_id );
 
 }
 
@@ -363,12 +376,8 @@ function wpas_get_users( $args = array() ) {
 
 	/* If there is a cached result we return it and don't run the expensive query. */
 	/*if ( false !== $result ) {
-		if ( is_array( $result ) && isset( $result[0] ) && is_object( $result[0] ) && is_a( $result[0], 'WP_User' ) ) {
-			delete_transient( "wpas_list_users_$hash" ); // Invalidate the previous cache
-		} else {
 			return apply_filters( 'wpas_get_users', get_users( array( 'include' => (array) $result ) ) );
 		}
-	}*/
 
 	/* Get all WordPress users */
 	$all_users = get_users();
@@ -414,9 +423,30 @@ function wpas_get_users( $args = array() ) {
 	}
 
 	/* Let's cache the result so that we can avoid running this query too many times. */
-	//set_transient( "wpas_list_users_$hash", $users_ids, apply_filters( 'wpas_list_users_cache_expiration', 60 * 60 * 24 ) );
 
 	return apply_filters( 'wpas_get_users', $list );
+
+}
+
+add_action( 'user_register',  'wpas_clear_get_users_cache' );
+add_action( 'delete_user',    'wpas_clear_get_users_cache' );
+add_action( 'profile_update', 'wpas_clear_get_users_cache' );
+/**
+ * Clear all the users lists transients
+ *
+ * If a new admin / agent is added, deleted or edited while the users list transient
+ * is still valid then the user won't appear / disappear from the users lists
+ * until the transient expires. In order to avoid this issue we clear the transients
+ * when one of the above actions is executed.
+ *
+ * @since 3.2.0
+ * @return void
+ */
+function wpas_clear_get_users_cache() {
+
+	global $wpdb;
+
+	$wpdb->get_results( $wpdb->prepare( "DELETE FROM $wpdb->options WHERE option_name LIKE '%s'", '_transient_wpas_list_users_%' ) );
 
 }
 

@@ -2,7 +2,8 @@
 
 <div class="wpas-system-status">
 	<textarea id="wpas-system-status-output" rows="10" style="display: none;"></textarea>
-	<button id="wpas-system-status-generate" class="button-secondary"><?php _e( 'Copy Report', 'wpas' ); ?></button>
+	<button id="wpas-system-status-generate-json" class="button-secondary"><?php _e( 'Copy Report', 'wpas' ); ?> - JSON</button>
+	<button id="wpas-system-status-generate-wporg" class="button-secondary"><?php _e( 'Copy Report', 'wpas' ); ?> - WordPress.org</button>
 </div>
 
 <table class="widefat wpas-system-status-table" id="wpas-system-status-wordpress">
@@ -289,7 +290,7 @@
 				$attributes[__( 'Logged', 'wpas')]      = true === boolval( $field['args']['log'] ) ? __( 'Yes', 'wpas' ) : __( 'No', 'wpas' );
 				$attributes[__( 'Show Column', 'wpas')] = true === boolval( $field['args']['show_column'] ) ? __( 'Yes', 'wpas' ) : __( 'No', 'wpas' );
 
-				if ( 'taxonomy' === $field['args']['callback'] ) {
+				if ( 'taxonomy' === $field['args']['field_type'] ) {
 					if ( true === boolval( $field['args']['taxo_std'] ) ) {
 						$attributes[__( 'Taxonomy', 'wpas')] = __( 'Yes (standard)', 'wpas' );
 					} else {
@@ -299,7 +300,7 @@
 					$attributes[__( 'Taxonomy', 'wpas')] = __( 'No', 'wpas' );
 				}
 
-				$attributes[__( 'Callback', 'wpas')] = '<code>' . $field['args']['callback'] . '</code>';
+				$attributes[__( 'Callback', 'wpas')] = '<code>' . $field['args']['field_type'] . '</code>';
 
 				foreach ( $attributes as $label => $value ) {
 					array_push( $values,  "<strong>$label</strong>: $value" );

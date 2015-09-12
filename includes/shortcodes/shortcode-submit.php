@@ -32,7 +32,7 @@ function wpas_sc_submit_form() {
 			if ( false !== $registration && !empty( $registration ) && !is_null( get_post( intval( $registration ) ) ) ) {
 				/* As the headers are already sent we can't use wp_redirect. */
 				echo '<meta http-equiv="refresh" content="0; url=' . get_permalink( $registration ) . '" />';
-				wpas_notification( false, __( 'You are being redirected...', 'wpas' ) );
+				echo wpas_get_notification_markup( 'info', __( 'You are being redirected...', 'wpas' ) );
 				exit;
 			}
 
@@ -69,14 +69,14 @@ function wpas_sc_submit_form() {
 			 * Check if the current user is logged in
 			 */
 			if ( false === is_user_logged_in() ) {
-				wpas_notification( 'failure', sprintf( __( 'You need to <a href="%s">log-in</a> to submit a ticket.', 'wpas' ), esc_url( '' ) ) );
+				echo wpas_get_notification_markup( 'failure', sprintf( __( 'You need to <a href="%s">log-in</a> to submit a ticket.', 'wpas' ), esc_url( '' ) ) );
 			} else {
 
 				/**
 				 * Make sure the current user can submit a ticket.
 				 */
-				if ( false === wpas_can_submit_ticket( $post->ID ) ) {
-					wpas_notification( 'failure', __( 'You are not allowed to submit a ticket.', 'wpas' ) );
+				if ( false === wpas_can_submit_ticket() ) {
+					echo wpas_get_notification_markup( 'failure', __( 'You are not allowed to submit a ticket.', 'wpas' ) );
 				}
 
 				/**
@@ -95,14 +95,13 @@ function wpas_sc_submit_form() {
 					 * If you want to allow admins and agents to submit tickets through the
 					 * front-end, please use the filter wpas_agent_submit_front_end and set the value to (bool) true.
 					 */
-					if( is_user_logged_in() && current_user_can( 'edit_ticket' ) && ( false === apply_filters( 'wpas_agent_submit_front_end', false ) ) ):
+					if ( is_user_logged_in() && current_user_can( 'edit_ticket' ) && ( false === apply_filters( 'wpas_agent_submit_front_end', false ) ) ):
 
-					/**
-					 * Keep in mind that if you allow agents to open ticket through the front-end, actions
-					 * will not be tracked.
-					 */
-
-						wpas_notification( 'info', sprintf( __( 'Sorry, support team members cannot submit tickets from here. If you need to open a ticket, please go to your admin panel or <a href="%s">click here to open a new ticket</a>.', 'wpas' ), add_query_arg( array( 'post_type' => 'ticket' ), admin_url( 'post-new.php' ) ) ) );
+						/**
+						 * Keep in mind that if you allow agents to open ticket through the front-end, actions
+						 * will not be tracked.
+						 */
+						echo wpas_get_notification_markup( 'info', sprintf( __( 'Sorry, support team members cannot submit tickets from here. If you need to open a ticket, please go to your admin panel or <a href="%s">click here to open a new ticket</a>.', 'wpas' ), add_query_arg( array( 'post_type' => 'ticket' ), admin_url( 'post-new.php' ) ) ) );
 
 					/**
 					 * If the user is authorized to post a ticket, we display the submit form
@@ -117,38 +116,6 @@ function wpas_sc_submit_form() {
 						 * @since  3.0.0
 						 */
 						do_action( 'wpas_submission_form_before' );
-
-						if ( isset( $_GET['message'] ) ) {
-
-							/* This seems to be a predefined error message. */
-							if ( is_numeric( $_GET['message'] ) ) {
-								wpas_notification( false, $_GET['message'] );
-							}
-
-							/* Otherwise it should be a custom error message */
-							else {
-
-								$messages = json_decode( base64_decode( (string)$_GET['message'] ) );
-								$contents = '';
-
-								if ( is_array( $messages ) && count( $messages ) > 1 ) {
-
-									$contents = '<ul>';
-
-									foreach ( $messages as $message ) {
-										$contents .= "<li>$message</li>";
-									}
-
-									$contents .= '</ul>';
-								} elseif( is_array( $messages ) ) {
-									$contents = $messages[0];
-								}
-
-								wpas_notification( 'failure', $contents );
-
-							}
-
-						} 
 
 						wpas_get_template( 'submission' );
 
@@ -169,10 +136,6 @@ function wpas_sc_submit_form() {
 			do_action( 'wpas_after_ticket_submission_form' );
 
 			echo '</div>';
-
-			if( isset( $_SESSION['formtmp'] ) ) {
-				unset( $_SESSION['formtmp'] );
-			}
 
 		endif;
 

@@ -20,6 +20,34 @@ function wpas_get_option( $option, $default = false ) {
 }
 
 /**
+ * Update a plugin option
+ *
+ * @since 3.2.0
+ *
+ * @param mixed $option The name of the option to update
+ * @param mixed $value  The new value for this option
+ *
+ * @return bool
+ */
+function wpas_update_option( $option, $value ) {
+
+	$options = maybe_unserialize( get_option( 'wpas_options', array() ) );
+
+	if ( ! array_key_exists( $option, $options ) ) {
+		return false;
+	}
+
+	if ( $value === $options[ $option ] ) {
+		return false;
+	}
+
+	$options[ $option ] = $value;
+
+	return update_option( 'wpas_options', serialize( $options ) );
+
+}
+
+/**
  * Add a security nonce.
  *
  * The function adds a security nonce to URLs
@@ -141,8 +169,16 @@ function wpas_is_plugin_page( $slug = '' ) {
 
 	global $post;
 
-	$plugin_post_types  = apply_filters( 'wpas_plugin_post_types', array( 'ticket' ) );
-	$plugin_admin_pages = apply_filters( 'wpas_plugin_admin_pages', array( 'wpas-status', 'wpas-addons' ) );
+	$ticket_list   = wpas_get_option( 'ticket_list' );
+	$ticket_submit = wpas_get_option( 'ticket_submit' );
+
+	/* Make sure these are arrays. Multiple selects were only used since 3.2, in earlier versions those options are strings */
+	if( ! is_array( $ticket_list ) ) { $ticket_list = (array) $ticket_list; }
+	if( ! is_array( $ticket_submit ) ) { $ticket_submit = (array) $ticket_submit; }
+
+	$plugin_post_types     = apply_filters( 'wpas_plugin_post_types',     array( 'ticket' ) );
+	$plugin_admin_pages    = apply_filters( 'wpas_plugin_admin_pages',    array( 'wpas-status', 'wpas-addons' ) );
+	$plugin_frontend_pages = apply_filters( 'wpas_plugin_frontend_pages', array_merge( $ticket_list, $ticket_submit ) );
 
 	/* Check for plugin pages in the admin */
 	if ( is_admin() ) {
@@ -175,14 +211,28 @@ function wpas_is_plugin_page( $slug = '' ) {
 
 		global $post;
 
-		$pages = array( wpas_get_option( 'ticket_list' ), wpas_get_option( 'ticket_submit' ) );
+		if ( empty( $post ) ) {
+			$protocol = stripos( $_SERVER['SERVER_PROTOCOL'], 'https' ) === true ? 'https://' : 'http://';
+			$post_id  = url_to_postid( $protocol . $_SERVER['SERVER_NAME'] . $_SERVER['REQUEST_URI'] );
+			$post     = get_post( $post_id );
+		}
 
 		if ( is_singular( 'ticket' ) ) {
 			return true;
 		}
 
-		if ( isset( $post ) && is_object( $post ) && in_array( $post->ID, $pages ) ) {
-			return true;
+		if ( isset( $post ) && is_object( $post ) && is_a( $post, 'WP_Post' ) ) {
+
+			// Check for post IDs
+			if ( in_array( $post->ID, $plugin_frontend_pages ) ) {
+				return true;
+			}
+
+			// Check for post types
+			if ( in_array( $post->post_type,$plugin_post_types  ) ) {
+				return true;
+			}
+
 		}
 
 		return false;
@@ -241,7 +291,7 @@ function wpas_make_button( $label = null, $args = array() ) {
 	$defaults = array(
 		'type'     => 'button',
 		'link'     => '',
-		'class'    => wpas_get_option( 'buttons_class', 'wpas-btn wpas-btn-default' ),
+		'class'    => apply_filters( 'wpas_make_button_class', 'wpas-btn wpas-btn-default' ),
 		'name'     => 'submit',
 		'value'    => '',
 		'onsubmit' => ''
@@ -337,9 +387,11 @@ function wpas_get_current_admin_url() {
  * it uses a meta refresh tag.
  *
  * @since  3.0.0
- * @param  string  $case     Redirect case used for filtering
- * @param  string  $location URL to redirect to
- * @param  mixed   $post_id  The ID of the post to redirect to (or null if none specified)
+ *
+ * @param  string $case     Redirect case used for filtering
+ * @param  string $location URL to redirect to
+ * @param  mixed  $post_id  The ID of the post to redirect to (or null if none specified)
+ *
  * @return integer           Returns false if location is not provided, true otherwise
  */
 function wpas_redirect( $case, $location = null, $post_id = null ) {
@@ -351,13 +403,13 @@ function wpas_redirect( $case, $location = null, $post_id = null ) {
 	/**
 	 * Filter the redirect URL.
 	 *
-	 * @param  string URL to redirect to
-	 * @param  mixed  ID of the post to redirect to or null if none specified
+	 * @param  string $location URL to redirect to
+	 * @param  mixed  $post_id  ID of the post to redirect to or null if none specified
 	 */
 	$location = apply_filters( "wpas_redirect_$case", $location, $post_id );
 	$location = wp_sanitize_redirect( $location );
 
-	if ( !headers_sent() ) {
+	if ( ! headers_sent() ) {
 		wp_redirect( $location, 302 );
 	} else {
 		echo "<meta http-equiv='refresh' content='0; url=$location'>";
@@ -394,9 +446,9 @@ function wpas_write_log( $handle, $message ) {
  * @since  3.0.2
  * @return void
  */
-function wpas_missing_dependencied() { ?>
+function wpas_missing_dependencies() { ?>
 	<div class="error">
-        <p><?php printf( __( 'Awesome Support dependencies are missing. The plugin can&#39;t be loaded properly. Please run %s before anything else. If you don&#39;t know what this is you should <a href="%s" class="thickbox">install the production version</a> of this plugin instead.', 'wpas' ), '<a href="https://getcomposer.org/doc/00-intro.md#using-composer" target="_blank"><code>composer install</code></a>', esc_url( add_query_arg( array( 'tab' => 'plugin-information', 'plugin' => 'awesome-support', 'TB_iframe' => 'true', 'width' => '772', 'height' => '935' ), admin_url( 'plugin-install.php' ) ) ) ); ?></p>
+        <p><?php printf( __( 'Awesome Support dependencies are missing. The plugin can’t be loaded properly. Please run %s before anything else. If you don’t know what this is you should <a href="%s" class="thickbox">install the production version</a> of this plugin instead.', 'wpas' ), '<a href="https://getcomposer.org/doc/00-intro.md#using-composer" target="_blank"><code>composer install</code></a>', esc_url( add_query_arg( array( 'tab' => 'plugin-information', 'plugin' => 'awesome-support', 'TB_iframe' => 'true', 'width' => '772', 'height' => '935' ), admin_url( 'plugin-install.php' ) ) ) ); ?></p>
     </div>
 <?php }
 
@@ -559,40 +611,41 @@ function wpas_get_settings_page_url( $tab = '' ) {
 
 }
 
-/**
- * Shuffle an associative array.
- *
- * @param array $list The array to shuffle
- *
- * @return array Shuffled array
- *
- * @link  http://php.net/manual/en/function.shuffle.php#99624
- * @since 3.1.10
- */
-function shuffle_assoc( $list ) {
+if ( ! function_exists( 'shuffle_assoc' ) ) {
+	/**
+	 * Shuffle an associative array.
+	 *
+	 * @param array $list The array to shuffle
+	 *
+	 * @return array Shuffled array
+	 *
+	 * @link  http://php.net/manual/en/function.shuffle.php#99624
+	 * @since 3.1.10
+	 */
+	function shuffle_assoc( $list ) {
 
-	if ( ! is_array( $list ) ) {
-		return $list;
+		if ( ! is_array( $list ) ) {
+			return $list;
+		}
+
+		$keys   = array_keys( $list );
+		$random = array();
+
+		shuffle( $keys );
+
+		foreach ( $keys as $key ) {
+			$random[ $key ] = $list[ $key ];
+		}
+
+		return $random;
+
 	}
-
-	$keys   = array_keys( $list );
-	$random = array();
-
-	shuffle( $keys );
-
-	foreach ( $keys as $key ) {
-		$random[ $key ] = $list[ $key ];
-	}
-
-	return $random;
-
 }
 
 if ( ! function_exists( 'wpas_get_admin_path_from_url' ) ) {
 	/**
 	 * Get the admin path based on the URL.
 	 *
-	 * @since 3.1.11
 	 * @return string Admin path
 	 */
 	function wpas_get_admin_path_from_url() {
@@ -605,10 +658,154 @@ if ( ! function_exists( 'wpas_get_admin_path_from_url' ) ) {
 		if ( $site_protocol !== $admin_protocol ) {
 			if ( 'https' === $admin_protocol ) {
 				$site_url = 'https' . substr( $site_url, 4 );
+			} elseif( 'https' === $site_protocol ) {
+				$admin_url = 'https' . substr( $admin_url, 4 );
 			}
 		}
 
-		return str_replace( trailingslashit( $site_url ), ABSPATH, get_admin_url() );
+		$abspath = str_replace( '\\', '/', ABSPATH );
+
+		return str_replace( trailingslashit( $site_url ), $abspath, $admin_url );
 
 	}
+}
+
+/**
+ * Recursively sort an array of taxonomy terms hierarchically. Child categories will be
+ * placed under a 'children' member of their parent term.
+ *
+ * @since  3.0.1
+ *
+ * @param Array   $cats     taxonomy term objects to sort
+ * @param Array   $into     result array to put them in
+ * @param integer $parentId the current parent ID to put them in
+ *
+ * @link   http://wordpress.stackexchange.com/a/99516/16176
+ */
+function wpas_sort_terms_hierarchicaly( &$cats = array(), &$into = array(), $parentId = 0 ) {
+
+	foreach ( $cats as $i => $cat ) {
+		if ( $cat->parent == $parentId ) {
+			$into[ $cat->term_id ] = $cat;
+			unset( $cats[ $i ] );
+		}
+	}
+
+	foreach ( $into as $topCat ) {
+		$topCat->children = array();
+		wpas_sort_terms_hierarchicaly( $cats, $topCat->children, $topCat->term_id );
+	}
+}
+
+/**
+ * Recursively displays hierarchical options into a select dropdown.
+ *
+ * @since  3.0.1
+ *
+ * @param  object $term  The term to display
+ * @param  string $value The value to compare against
+ * @param  int    $level The current level in the drop-down hierarchy
+ *
+ * @return void
+ */
+function wpas_hierarchical_taxonomy_dropdown_options( $term, $value, $level = 1 ) {
+
+	$option = '';
+
+	/* Add a visual indication that this is a child term */
+	if ( 1 !== $level ) {
+		for ( $i = 1; $i < ( $level - 1 ); $i++ ) {
+			$option .= '&nbsp;&nbsp;&nbsp;&nbsp;';
+		}
+		$option .= '&angrt; ';
+	}
+
+	$option .= $term->name;
+	?>
+
+	<option value="<?php echo $term->term_id; ?>" <?php if( (int) $value === (int) $term->term_id || $value === $term->slug ) { echo 'selected="selected"'; } ?>><?php echo $option; ?></option>
+
+	<?php if ( isset( $term->children ) && !empty( $term->children ) ) {
+		++$level;
+		foreach ( $term->children as $child ) {
+			wpas_hierarchical_taxonomy_dropdown_options( $child, $value, $level );
+		}
+	}
+
+}
+
+/**
+ * Get URL of a submission page
+ *
+ * As the plugin can handle multiple submission pages, we need to
+ * make sure that a give post ID is indeed a submission page, and if no
+ * post ID is provided we return the URL of the first submission page.
+ *
+ * @since 3.2
+ *
+ * @param bool|false $post_id ID of the submission page
+ *
+ * @return string
+ */
+function wpas_get_submission_page_url( $post_id = false ) {
+
+	$submission = wpas_get_option( 'ticket_submit' );
+
+	if ( is_int( $post_id ) && in_array( $post_id, $submission ) ) {
+		$url = get_permalink( (int) $post_id );
+	} else {
+		$url = get_permalink( (int) $submission[0] );
+	}
+
+	return esc_url( $url );
+
+}
+
+/**
+ * Get the link to a ticket reply
+ *
+ * @since 3.2
+ *
+ * @param int $reply_id ID of the reply to get the link to
+ *
+ * @return string|bool Reply link or false if the reply doesn't exist
+ */
+function wpas_get_reply_link( $reply_id ) {
+
+	$reply = get_post( $reply_id );
+
+	if ( empty( $reply ) ) {
+		return false;
+	}
+
+	if ( 'ticket_reply' !== $reply->post_type || 0 === (int) $reply->post_parent ) {
+		return false;
+	}
+
+	$replies = wpas_get_replies( $reply->post_parent, array( 'read', 'unread' ) );
+
+	if ( empty( $replies ) ) {
+		return false;
+	}
+
+	$position = 0;
+
+	foreach ( $replies as $key => $post ) {
+
+		if ( $reply_id === $post->ID ) {
+			$position = $key + 1;
+		}
+
+	}
+
+	if ( 0 === $position ) {
+		return false;
+	}
+
+	$page = ceil( $position / 10 );
+	$base = 1 !== (int) $page ? add_query_arg( 'as-page', $page, get_permalink( $reply->post_parent ) ) : get_permalink( $reply->post_parent );
+	$link = $base . "#reply-$reply_id";
+
+	return esc_url( $link );
+
 }

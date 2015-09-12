@@ -33,9 +33,14 @@ function wpas_core_settings_general( $def ) {
 				array(
 					'name'    => __( 'Allow Registrations', 'wpas' ),
 					'id'      => 'allow_registrations',
-					'type'    => 'checkbox',
+					'type'    => 'radio',
 					'desc'    => sprintf( __( 'Allow users to register on the support. This setting can be enabled even though the WordPress setting is disabled. Currently, registrations are %s by WordPress.', 'wpas' ),  "<strong>$registration_lbl</strong>" ),
-					'default' => true
+					'default' => 'allow',
+					'options' => array(
+						'allow'           => __( 'Allow registrations', 'wpas' ),
+						'disallow'        => __( 'Disallow registrations', 'wpas' ),
+						'disallow_silent' => __( 'Disallow registrations without notice (just show the login form)', 'wpas' ),
+					)
 				),
 				array(
 					'name'    => __( 'Replies Order', 'wpas' ),
@@ -44,6 +49,13 @@ function wpas_core_settings_general( $def ) {
 					'desc'    => __( 'In which order should the replies be displayed (for both client and admin side)?', 'wpas' ),
 					'options' => array( 'ASC' => __( 'Old to New', 'wpas' ), 'DESC' => __( 'New to Old', 'wpas' ) ),
 					'default' => 'ASC'
+				),
+				array(
+					'name'    => __( 'Replies Per Page', 'wpas' ),
+					'id'      => 'replies_per_page',
+					'type'    => 'text',
+					'default' => 10,
+					'desc'    => __( 'How many replies should be displayed per page on a ticket details screen?', 'wpas' )
 				),
 				array(
 					'name'    => __( 'Hide Closed', 'wpas' ),
@@ -71,20 +83,22 @@ function wpas_core_settings_general( $def ) {
 					'type' => 'heading',
 				),
 				array(
-					'name'    => __( 'Ticket Submission', 'wpas' ),
-					'id'      => 'ticket_submit',
-					'type'    => 'select',
-					'desc'    => sprintf( __( 'The page used for ticket submission. This page should contain the shortcode %s', 'wpas' ), '<code>[ticket-submit]</code>' ),
-					'options' => wpas_list_pages(),
-					'default' => ''
+					'name'     => __( 'Ticket Submission', 'wpas' ),
+					'id'       => 'ticket_submit',
+					'type'     => 'select',
+					'multiple' => true,
+					'desc'     => sprintf( __( 'The page used for ticket submission. This page should contain the shortcode %s', 'wpas' ), '<code>[ticket-submit]</code>' ),
+					'options'  => wpas_list_pages(),
+					'default'  => ''
 				),
 				array(
-					'name'    => __( 'Tickets List', 'wpas' ),
-					'id'      => 'ticket_list',
-					'type'    => 'select',
-					'desc'    => sprintf( __( 'The page that will list all tickets for a client. This page should contain the shortcode %s', 'wpas' ), '<code>[tickets]</code>' ),
-					'options' => wpas_list_pages(),
-					'default' => ''
+					'name'     => __( 'Tickets List', 'wpas' ),
+					'id'       => 'ticket_list',
+					'type'     => 'select',
+					'multiple' => true,
+					'desc'     => sprintf( __( 'The page that will list all tickets for a client. This page should contain the shortcode %s', 'wpas' ), '<code>[tickets]</code>' ),
+					'options'  => wpas_list_pages(),
+					'default'  => ''
 				),
 				array(
 					'name' => __( 'Terms & Conditions', 'wpas' ),

@@ -38,7 +38,7 @@ function wpas_single_ticket( $content ) {
 	}
 
 	/* Only apply this on the ticket single. */
-	if ( $slug !== $post->post_type ) {
+	if ( $post && $slug !== $post->post_type ) {
 		return $content;
 	}
 
@@ -59,11 +59,11 @@ function wpas_single_ticket( $content ) {
 	if ( ! wpas_can_view_ticket( $post->ID ) ) {
 
 		if ( is_user_logged_in() ) {
-			return wpas_notification( false, 13, false );
+			return wpas_get_notification_markup( 'failure', __( 'You are not allowed to view this ticket.', 'wpas' ) );
 		} else {
 
 			$output = '';
-			$output .= wpas_notification( false, 13, false );
+			$output .= wpas_get_notification_markup( 'failure', __( 'You are not allowed to view this ticket.', 'wpas' ) );
 
 			ob_start();
 			wpas_get_template( 'registration' );
@@ -87,13 +87,6 @@ function wpas_single_ticket( $content ) {
 
 	/* Get the ticket content */
 	ob_start();
-
-	/**
-	 * Display possible messages to the visitor.
-	 */
-	if ( isset( $_GET['message'] ) ) {
-		wpas_notification( false, $_GET['message'] );
-	}
 
 	/**
 	 * wpas_frontend_plugin_page_top is executed at the top
@@ -255,7 +248,7 @@ function wpas_get_theme_stylesheet_uri() {
 	}
 
 	/* Build the final URL to the resource */
-	$uri = trailingslashit( home_url() ) . $truncate;
+	$uri = trailingslashit( site_url() ) . $truncate;
 
 	return apply_filters( 'wpas_get_theme_stylesheet_uri', $uri ); 
 
@@ -280,7 +273,7 @@ function wpas_ticket_header( $args = array() ) {
 		'table_class'     => 'wpas-table wpas-ticket-details-header',
 	);
 
-	extract( shortcode_atts( $default, $args ) );
+	$args = wp_parse_args( $args, $default );
 
 	$custom_fields = $wpas_cf->get_custom_fields();
 
@@ -306,7 +299,7 @@ function wpas_ticket_header( $args = array() ) {
 		/* Don't display fields that aren't specifically designed to */
 		if ( true === $field['args']['show_column'] ) {
 			$columns[$field['name']]           = !empty( $field['args']['title'] ) ? sanitize_text_field( $field['args']['title'] ) : wpas_get_title_from_id( $field['name'] );
-			$columns_callbacks[$field['name']] = ( 'taxonomy' === $field['args']['callback'] && true === $field['args']['taxo_std'] ) ? 'taxonomy' : $field['args']['column_callback'];
+			$columns_callbacks[$field['name']] = ( 'taxonomy' === $field['args']['field_type'] && true === $field['args']['taxo_std'] ) ? 'taxonomy' : $field['args']['column_callback'];
 		}
 
 	}
@@ -315,9 +308,9 @@ function wpas_ticket_header( $args = array() ) {
 	$columns_callbacks = apply_filters( 'wpas_tickets_details_columns_callbacks', $columns_callbacks );
 	?>
 
-	<?php if ( !empty( $container ) ): ?><<?php echo $container; ?>><?php endif; ?>
+	<?php if ( ! empty( $args['container'] ) ): ?><<?php echo $args['container']; ?>><?php endif; ?>
 
-		<table id="<?php echo $table_id; ?>" class="<?php echo $table_class; ?>">
+		<table id="<?php echo $args['table_id']; ?>" class="<?php echo $args['table_class']; ?>">
 			<thead>
 				<tr>
 					<?php foreach ( $columns as $column => $label ): ?>
@@ -336,9 +329,7 @@ function wpas_ticket_header( $args = array() ) {
 			</tbody>
 		</table>
 
-	<?php if ( !empty( $container ) ): ?></<?php echo $container; ?>><?php endif; ?>
-
-	<?php
+	<?php if ( ! empty( $args['container'] ) ): ?></<?php echo $args['container']; ?>><?php endif;
 
 }
 
@@ -367,7 +358,7 @@ function wpas_get_reply_form( $args = array() ) {
 		'textarea_class'  => 'wpas-form-control wpas-wysiwyg',
 	);
 
-	extract( shortcode_atts( $defaults, $args ) );
+	$args = wp_parse_args( $args, $defaults );
 
 	/**
 	 * Filter the form class.
@@ -378,7 +369,7 @@ function wpas_get_reply_form( $args = array() ) {
 	 * @since  3.0.0
 	 * @var    string
 	 */
-	$form_class = apply_filters( 'wpas_frontend_reply_form_class', $form_class );
+	$form_class = apply_filters( 'wpas_frontend_reply_form_class', $args['form_class'] );
 
 	/**
 	 * wpas_ticket_details_reply_form_before hook
@@ -389,7 +380,7 @@ function wpas_get_reply_form( $args = array() ) {
 
 	if( 'closed' === $status ):
 
-		wpas_notification( 'info', sprintf( __( 'The ticket has been closed. If you feel that your issue has not been solved yet or something new came up in relation to this ticket, <a href="%s">you can re-open it by clicking this link</a>.', 'wpas' ), wpas_get_reopen_url() ) );
+		echo wpas_get_notification_markup( 'info', sprintf( __( 'The ticket has been closed. If you feel that your issue has not been solved yet or something new came up in relation to this ticket, <a href="%s">you can re-open it by clicking this link</a>.', 'wpas' ), wpas_get_reopen_url() ) );
 
 	/**
 	 * Check if the ticket is currently open and if the current user
@@ -397,7 +388,7 @@ function wpas_get_reply_form( $args = array() ) {
 	 */
 	elseif( 'open' === $status && true === wpas_can_reply_ticket() ): ?>
 
-		<form id="<?php echo $form_id; ?>" class="<?php echo $form_class; ?>" method="post" action="<?php echo get_permalink( $post_id ); ?>" enctype="multipart/form-data">
+		<form id="<?php echo $args['form_id']; ?>" class="<?php echo $form_class; ?>" method="post" action="<?php echo get_permalink( $post_id ); ?>" enctype="multipart/form-data">
 
 			<?php
 			/**
@@ -407,8 +398,8 @@ function wpas_get_reply_form( $args = array() ) {
 			 */
 			do_action( 'wpas_ticket_details_reply_textarea_before' ); ?>
 
-			<<?php echo $container; ?> id="<?php echo $container_id; ?>" class="<?php echo $container_class; ?>">
-				<?php echo $textarea_before;
+			<<?php echo $args['container']; ?> id="<?php echo $args['container_id']; ?>" class="<?php echo $args['container_class']; ?>">
+				<?php echo $args['textarea_before'];
 
 					/**
 					 * Load the visual editor if enabled
@@ -420,7 +411,7 @@ function wpas_get_reply_form( $args = array() ) {
 							'textarea_name' => 'wpas_user_reply',
 							'textarea_rows' => 10,
 							'tabindex'      => 2,
-							'editor_class'  => wpas_get_field_class( 'wpas_reply', $textarea_class, false ),
+							'editor_class'  => $args['textarea_class'],
 							'quicktags'     => false,
 							'tinymce'       => array(
 								'toolbar1' => 'bold,italic,underline,strikethrough,hr,|,bullist,numlist,|,link,unlink',
@@ -448,8 +439,8 @@ function wpas_get_reply_form( $args = array() ) {
 						<textarea class="form-control" rows="10" name="wpas_user_reply" rows="6" id="wpas-reply-textarea" placeholder="<?php _e( 'Type your reply here.', 'wpas' ); ?>" <?php if ( false === $can_submit_empty ): ?>required="required"<?php endif; ?>></textarea>
 					<?php }
 				
-				echo $textarea_after; ?>
-			</<?php echo $container; ?>>
+				echo $args['textarea_after']; ?>
+			</<?php echo $args['container']; ?>>
 
 			<?php
 			/**
@@ -497,9 +488,9 @@ function wpas_get_reply_form( $args = array() ) {
 	 * This case is an agent viewing the ticket from the front-end. All actions are tracked in the back-end only, that's why we prevent agents from replying through the front-end.
 	 */
 	elseif( 'open' === $status && false === wpas_can_reply_ticket() ):
-		wpas_notification( 'info', sprintf( __( 'To reply to this ticket, please <a href="%s">go to your admin panel</a>.', 'wpas' ), add_query_arg( array( 'post' => $post_id, 'action' => 'edit' ), admin_url( 'post.php' ) ) ) );
+		echo wpas_get_notification_markup( 'info', sprintf( __( 'To reply to this ticket, please <a href="%s">go to your admin panel</a>.', 'wpas' ), add_query_arg( array( 'post' => $post_id, 'action' => 'edit' ), admin_url( 'post.php' ) ) ) );
 	else:
-		wpas_notification( 'info', __( 'You are not allowed to reply to this ticket.', 'wpas' ) );
+		echo wpas_get_notification_markup( 'info', __( 'You are not allowed to reply to this ticket.', 'wpas' ) );
 	endif;
 
 	/**
@@ -551,63 +542,6 @@ function wpas_get_login_url() {
 }
 
 /**
- * Shows the message field.
- *
- * The function echoes the textarea where the user
- * may input the ticket description. The field can be
- * either a textarea or a WYSIWYG depending on the plugin settings.
- * The WYSIWYG editor uses TinyMCE with a minimal configuration.
- *
- * @since  3.0.0
- * @param  array  $editor_args Arguments used for TinyMCE
- * @return void
- */
-function wpas_get_message_textarea( $editor_args = array() ) {
-
-	/**
-	 * Check if the description field should use the WYSIWYG editor
-	 * 
-	 * @var string
-	 */
-	$textarea_class = ( true === ( $wysiwyg = boolval( wpas_get_option( 'frontend_wysiwyg_editor' ) ) ) ) ? 'wpas-wysiwyg' : 'wpas-textarea';
-
-	if ( true === $wysiwyg ) {
-
-		$editor_defaults = apply_filters( 'wpas_ticket_editor_args', array(
-			'media_buttons' => false,
-			'textarea_name' => 'wpas_message',
-			'textarea_rows' => 10,
-			'tabindex'      => 2,
-			'editor_class'  => wpas_get_field_class( 'wpas_message', $textarea_class, false ),
-			'quicktags'     => false,
-			'tinymce'       => array(
-				'toolbar1' => 'bold,italic,underline,strikethrough,hr,|,bullist,numlist,|,link,unlink',
-				'toolbar2' => ''
-			),
-		) );
-
-		?><div class="wpas-submit-ticket-wysiwyg"><?php
-			wp_editor( wpas_get_field_value( 'wpas_message' ), 'wpas-ticket-message', apply_filters( 'wpas_reply_wysiwyg_args', $editor_defaults ) );
-		?></div><?php
-
-	} else {
-
-		/**
-		 * Define if the body can be submitted empty or not.
-		 *
-		 * @since  3.0.0
-		 * @var boolean
-		 */
-		$can_submit_empty = apply_filters( 'wpas_can_message_be_empty', false );
-		?>
-		<div class="wpas-submit-ticket-wysiwyg">
-			<textarea <?php wpas_get_field_class( 'wpas_message', $textarea_class ); ?> id="wpas-ticket-message" name="wpas_message" placeholder="<?php echo apply_filters( 'wpas_form_field_placeholder_wpas_message', __( 'Describe your problem as accurately as possible', 'wpas' ) ); ?>" rows="10" <?php if ( false === $can_submit_empty ): ?>required="required"<?php endif; ?>><?php echo wpas_get_field_value( 'wpas_message' ); ?></textarea>
-		</div>
-	<?php }
-
-}
-
-/**
  * Get tickets list columns.
  *
  * Retrieve the columns to display on the list of tickets
@@ -640,7 +574,7 @@ function wpas_get_tickets_list_columns() {
 		/* Don't display fields that aren't specifically designed to */
 		if ( true === $field['args']['show_column'] ) {
 			$column_title            = !empty( $field['args']['title'] ) ? sanitize_text_field( $field['args']['title'] ) : wpas_get_title_from_id( $field['name'] );
-			$column_callback         = ( 'taxonomy' === $field['args']['callback'] && true === $field['args']['taxo_std'] ) ? 'taxonomy' : $field['args']['column_callback'];
+			$column_callback         = ( 'taxonomy' === $field['args']['field_type'] && true === $field['args']['taxo_std'] ) ? 'taxonomy' : $field['args']['column_callback'];
 			$columns[$field['name']] = array( 'title' => $column_title, 'callback' => $column_callback );
 		}
 
@@ -678,7 +612,15 @@ function wpas_get_tickets_list_column_content( $column_id, $column ) {
 		break;
 
 		case 'title':
-			?><a href="<?php echo get_permalink( get_the_ID() ); ?>"><?php the_title(); ?></a><?php
+
+			// If the replies are displayed from the oldest to the newest we want to link directly to the latest reply in case there are multiple reply pages
+			if ( 'ASC' === wpas_get_option( 'replies_order', 'ASC' ) ) {
+				$last_reply = wpas_get_replies( get_the_ID(), array( 'read', 'unread' ), array( 'posts_per_page' => 1, 'order' => 'DESC' ) );
+				$link       = ! empty( $last_reply ) ? wpas_get_reply_link( $last_reply[0]->ID ) : get_permalink( get_the_ID() );
+			} else {
+				$link = get_permalink( get_the_ID() );
+			}
+			?><a href="<?php echo $link; ?>"><?php the_title(); ?></a><?php
 		break;
 
 		case 'date':
@@ -760,8 +702,11 @@ function wpas_get_offset_html5() {
  * and is necessary for non standard taxonomies (such as product).
  *
  * @since  3.1.3
+ *
  * @param  string $field    ID of the field to display
  * @param  integer $post_id ID of the current post
+ * @param string $separator Separator used to join the taxonomy values
+ *
  * @return void
  */
 function wpas_show_taxonomy_column( $field, $post_id, $separator = ', ' ) {
@@ -791,5 +736,210 @@ function wpas_show_taxonomy_column( $field, $post_id, $separator = ', ' ) {
 		echo implode( $separator, $list );
 
 	}
+
+}
+
+/**
+ * Display the post status.
+ *
+ * Gets the ticket status and formats it according to the plugin settings.
+ *
+ * @since  3.0.0
+ *
+ * @param string   $name    Field / column name. This parameter is important as it is automatically passed by some
+ *                          filters
+ * @param  integer $post_id ID of the post being processed
+ *
+ * @return string           Formatted ticket status
+ */
+function wpas_cf_display_status( $name, $post_id ) {
+
+	$status = wpas_get_ticket_status( $post_id );
+
+	if ( 'closed' === $status ) {
+		$label = __( 'Closed', 'wpas' );
+		$color = wpas_get_option( "color_$status", '#dd3333' );
+		$tag   = "<span class='wpas-label' style='background-color:$color;'>$label</span>";
+	} else {
+
+		$post          = get_post( $post_id );
+		$post_status   = $post->post_status;
+		$custom_status = wpas_get_post_status();
+
+		if ( ! array_key_exists( $post_status, $custom_status ) ) {
+			$label = __( 'Open', 'wpas' );
+			$color = wpas_get_option( "color_$status", '#169baa' );
+			$tag   = "<span class='wpas-label' style='background-color:$color;'>$label</span>";
+		} else {
+			$defaults = array(
+				'queued'     => '#1e73be',
+				'processing' => '#a01497',
+				'hold'       => '#b56629'
+			);
+			$label    = $custom_status[ $post_status ];
+			$color    = wpas_get_option( "color_$post_status", false );
+
+			if ( false === $color ) {
+				if ( isset( $defaults[ $post_status ] ) ) {
+					$color = $defaults[ $post_status ];
+				} else {
+					$color = '#169baa';
+				}
+			}
+
+			$tag = "<span class='wpas-label' style='background-color:$color;'>$label</span>";
+		}
+	}
+
+	echo $tag;
+
+}
+
+/**
+ * Get the notification wrapper markup
+ *
+ * @since 3.2
+ *
+ * @param string $type Type of notification. Defines the wrapper class to use
+ * @param string $message Notification message
+ *
+ * @return string
+ */
+function wpas_get_notification_markup( $type = 'info', $message = '' ) {
+
+	if ( empty( $message ) ) {
+		return '';
+	}
+
+	$classes = apply_filters( 'wpas_notification_classes', array(
+		'success' => 'wpas-alert wpas-alert-success',
+		'failure' => 'wpas-alert wpas-alert-danger',
+		'info'    => 'wpas-alert wpas-alert-info',
+	) );
+
+	if ( ! array_key_exists( $type, $classes ) ) {
+		$type = 'info';
+	}
+
+	$markup = apply_filters( 'wpas_notification_wrapper', '<div class="%s">%s</div>' ); // Keep this filter for backwards compatibility
+	$markup = apply_filters( 'wpas_notification_markup', sprintf( $markup, $classes[$type], $message ), $type );
+
+	return $markup;
+
+}
+
+/**
+ * Get pagination link
+ *
+ * This is used for pagination throughout Awesome Support.
+ * It is used for paginating ticket replies as well as tickets lists.
+ *
+ * @since 3.2
+ *
+ * @param string $direction Direction of the link (prev or next)
+ * @param int $posts Total number of pages
+ *
+ * @return string Link to the prev/next page
+ */
+function wpas_pagination_link( $direction = 'next', $posts = 0 ) {
+
+	global $post;
+
+	if ( ! isset( $post ) ) {
+		return '';
+	}
+
+	$current_page   = isset( $_GET['as-page'] ) ? filter_input( INPUT_GET, 'as-page', FILTER_SANITIZE_NUMBER_INT ) : 1;
+	$posts_per_page = (int) wpas_get_option( 'replies_per_page', 10 );
+	$link           = '';
+
+	switch ( $direction ) {
+
+		case 'prev':
+
+			if ( $current_page > 1 ) {
+				$page = $current_page - 1;
+				$link = get_permalink( $post->ID ) . '?as-page=' . $page;
+			}
+
+			break;
+
+		case 'next':
+
+			if ( 0 !== $posts && 0 !== $posts_per_page && $current_page < ceil( $posts / $posts_per_page ) ) {
+				$page = $current_page + 1;
+				$link = get_permalink( $post->ID ) . '?as-page=' . $page;
+			}
+
+			break;
+
+	}
+
+	return empty( $link ) ? $link : esc_url( $link );
+
+}
+
+/**
+ * Get previous page link
+ *
+ * @since 3.2
+ *
+ * @param string $label Link anchor
+ * @param bool|true $echo Whether to echo the link or just return it
+ *
+ * @return string
+ */
+function wpas_prev_page_link( $label = '', $echo = true ) {
+
+	if ( empty( $label ) ) {
+		$label = '< ' . __( 'Previous Page', 'wpas' );
+	}
+
+	$link = wpas_pagination_link( 'prev' );
+
+	if ( ! empty( $link ) ) {
+		$link = "<a href='$link'>$label</a>";
+	}
+
+	if ( true === $echo ) {
+		echo $link;
+	} else {
+		return $link;
+	}
+
+	return $link;
+
+}
+
+/**
+ * Get next page link
+ *
+ * @since 3.2
+ *
+ * @param string $label Link anchor
+ * @param int $posts Total number of posts
+ * @param bool|true $echo Whether to echo the link or just return it
+ *
+ * @return string
+ */
+function wpas_next_page_link( $label = '', $posts = 0, $echo = true ) {
+
+	if ( empty( $label ) ) {
+		$label = __( 'Next Page', 'wpas' ) . ' >';
+	}
+
+	$link = wpas_pagination_link( 'next', $posts );
+
+	if ( ! empty( $link ) ) {
+		$link = "<a href='$link'>$label</a>";
+	}
+
+	if ( true === $echo ) {
+		echo $link;
+	} else {
+		return $link;
+	}
+
+	return $link;
 
 }

@@ -83,6 +83,23 @@ Ticket List
 
 /*
 ==========================================================================
+Button Groups
+==========================================================================
+*/
+.wpas-btn-group {
+	[class^="button-"]:first-child {
+		border-top-right-radius: 0px;
+		border-bottom-right-radius: 0px;
+		border-right: none;
+	}
+	[class^="button-"]:last-child {
+		border-top-left-radius: 0px;
+		border-bottom-left-radius: 0px;
+	}
+}
+
+/*
+==========================================================================
 System Status
 ==========================================================================
 */
@@ -251,7 +268,7 @@ Ticket Replies
 		padding: 0;
 	}
 }
-.wpas-attachment-container {
+#wpas_files_wrapper {
 	background-color: #FFFFED;
 	padding: 1.5em;
 	margin: 1.5em 0;
@@ -259,6 +276,7 @@ Ticket Replies
 
 	label {
 		display: block;
+		font-weight: bold;
 	}
 	p {
 		margin: 0;
@@ -336,4 +354,22 @@ WordPress Style for Select2 3.5.2
 	padding: 10px;
 	min-height: 28px;
 	font-size: 14px;
+}
+
+/*
+==========================================================================
+Metaboxes - Custom Fields
+==========================================================================
+*/
+.wpas-custom-fields {
+	.wpas-form-group + .wpas-form-group {
+		margin-top: 1em;
+	}
+	.wpas-form-control, select, input, textarea {
+		width: 100%;
+	}
+	label {
+		display: block;
+		margin-bottom: .25em;
+	}
 }

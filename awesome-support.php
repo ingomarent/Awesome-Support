@@ -10,7 +10,7 @@
  * Plugin Name:       Awesome Support
  * Plugin URI:        http://getawesomesupport.com
  * Description:       Awesome Support is a great ticketing system that will help you improve your customer satisfaction by providing a unique customer support experience.
- * Version:           3.1.11
+ * Version:           3.1.12
  * Author:            ThemeAvenue
  * Author URI:        http://themeavenue.net
  * Text Domain:       wpas
@@ -28,7 +28,7 @@ if ( ! defined( 'WPINC' ) ) {
  * Shortcuts
  *----------------------------------------------------------------------------*/
 
-define( 'WPAS_VERSION',           '3.1.11' );
+define( 'WPAS_VERSION',           '3.1.12' );
 define( 'WPAS_DB_VERSION',        '1' );
 define( 'WPAS_URL',               trailingslashit( plugin_dir_url( __FILE__ ) ) );
 define( 'WPAS_PATH',              trailingslashit( plugin_dir_path( __FILE__ ) ) );
@@ -60,7 +60,7 @@ $wpas_addons = array();
 
 require_once( WPAS_PATH . 'includes/functions-fallback.php' );
 require_once( WPAS_PATH . 'includes/class-logger.php' );
-require_once( WPAS_PATH . 'class-awesome-support.php' );
+require_once( WPAS_PATH . 'includes/class-awesome-support.php' );
 
 /**
  * Register hooks that are fired when the plugin is activated or deactivated.
@@ -79,9 +79,13 @@ add_action( 'plugins_loaded', array( 'Awesome_Support', 'get_instance' ) );
  * A couple of addons are built in the plugin.
  * We load them here.
  */
-require_once( WPAS_PATH . 'includes/addons/custom-fields/class-custom-fields.php' );
 require_once( WPAS_PATH . 'includes/addons/file-uploader/class-file-uploader.php' );
 require_once( WPAS_PATH . 'includes/addons/class-mailgun-email-check.php' );
+
+/* Load custom fields dependencies */
+require_once( WPAS_PATH . 'includes/custom-fields/class-custom-field.php' );
+require_once( WPAS_PATH . 'includes/custom-fields/class-custom-fields.php' );
+require_once( WPAS_PATH . 'includes/custom-fields/functions-custom-fields.php' );   // Submission form related functions
 
 /**
  * Call all classes and functions files that are shared
@@ -92,15 +96,19 @@ require_once( WPAS_PATH . 'includes/addons/class-mailgun-email-check.php' );
 require_once( WPAS_PATH . 'includes/functions-post.php' );            // All the functions related to opening a ticket and submitting replies
 require_once( WPAS_PATH . 'includes/functions-user.php' );            // Everything related to user login, registration and capabilities
 require_once( WPAS_PATH . 'includes/functions-addons.php' );          // Addons functions and autoloader
+require_once( WPAS_PATH . 'includes/functions-deprecated.php' );      // Load deprecated functions
 require_once( WPAS_PATH . 'includes/class-log-history.php' );         // Logging class
 require_once( WPAS_PATH . 'includes/class-email-notifications.php' ); // E-mail notification class
 require_once( WPAS_PATH . 'includes/functions-general.php' );         // Functions that are used both in back-end and front-end
-require_once( WPAS_PATH . 'includes/functions-custom-fields.php' );   // Submission form related functions
+require_once( WPAS_PATH . 'includes/functions-error.php' );           // Error handling
+require_once( WPAS_PATH . 'includes/functions-notification.php' );    // Notification handling
 require_once( WPAS_PATH . 'includes/functions-templating.php' );      // Templating function
 require_once( WPAS_PATH . 'includes/class-post-type.php' );           // Register post types and related functions
 require_once( WPAS_PATH . 'includes/class-product-sync.php' );        // Keep the product taxonomy in sync with e-commerce products
 require_once( WPAS_PATH . 'includes/class-gist.php' );                // Add oEmbed support for Gists
 require_once( WPAS_PATH . 'includes/class-wpas-editor-ajax.php' );    // Helper class to load a wp_editor instance via Ajax
+require_once( WPAS_PATH . 'includes/class-agent.php' );               // Support agent class
+require_once( WPAS_PATH . 'includes/class-wpas-session.php' );
 
 /**
  * Check if dependencies are loaded.
@@ -117,14 +125,13 @@ require_once( WPAS_PATH . 'includes/class-wpas-editor-ajax.php' );    // Helper 
  * @since  3.0.2
  */
 if ( ! Awesome_Support::dependencies_loaded() ) {
-	add_action( 'admin_notices', 'wpas_missing_dependencied' );
+	add_action( 'admin_notices', 'wpas_missing_dependencies' );
 }
 
 /*----------------------------------------------------------------------------*
  * Public-Facing Only Functionality
  *----------------------------------------------------------------------------*/
 if ( ! is_admin() && Awesome_Support::dependencies_loaded() ) {
-	require_once( WPAS_PATH . 'includes/class-notification.php' ); // Load notifications class
 	require_once( WPAS_PATH . 'includes/shortcodes/shortcode-tickets.php' ); // The plugin main shortcodes
 	require_once( WPAS_PATH . 'includes/shortcodes/shortcode-submit.php' );  // The plugin main shortcode-submit
 }
@@ -152,9 +159,41 @@ if ( is_admin() && Awesome_Support::dependencies_loaded() ) {
 
 }
 
+/*----------------------------------------------------------------------------*
+ * Declare global variables
+ *----------------------------------------------------------------------------*/
+
 /**
- * Start the session if needed.
+ * Instantiate the global $wpas_cf object containing all the custom fields.
+ * This object is used throughout the entire plugin so it is capital to be able
+ * to access it anytime and not to redeclare a second object when registering
+ * new custom fields.
+ *
+ * @since  3.0.0
+ * @var    $wpas_cf WPAS_Custom_Fields
  */
-if ( ! session_id() && ! headers_sent() ) {
-	session_start();
+$wpas_cf = new WPAS_Custom_Fields;
+
+/**
+ * Awesome Support global session
+ *
+ * Uses PHP sessions if possible, Eric Mann's session manager otherwise
+ *
+ * @since 3.2
+ * @var WPAS_Session
+ */
+$wpas_session = new WPAS_Session();
+
+/*----------------------------------------------------------------------------*
+ * Load theme's functions
+ *----------------------------------------------------------------------------*/
+add_action( 'init', 'wpas_load_theme_functions' );
+/**
+ * Load Awesome Support's theme functions if any
+ *
+ * @since 3.2.0
+ * @return void
+ */
+function wpas_load_theme_functions() {
+	wpas_get_template( 'functions' );
 }

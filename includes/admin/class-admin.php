@@ -64,6 +64,7 @@ class Awesome_Support_Admin {
 			require_once( WPAS_PATH . 'includes/admin/class-admin-user.php' );
 			require_once( WPAS_PATH . 'includes/admin/class-admin-titan.php' );
 			require_once( WPAS_PATH . 'includes/admin/class-admin-help.php' );
+			require_once( WPAS_PATH . 'includes/admin/upgrade/class-upgrade.php' );
 
 			if ( ! class_exists( 'TAV_Remote_Notification_Client' ) ) {
 				require_once( WPAS_PATH . 'includes/class-remote-notification-client.php' );
@@ -89,6 +90,9 @@ class Awesome_Support_Admin {
 			if ( isset( $_GET['wpas-do'] ) ) {
 				add_action( 'init', array( $this, 'custom_actions' ) );
 			}
+
+			/* Instantiate the upgrade class */
+			add_action( 'plugins_loaded', array( 'WPAS_Upgrade', 'get_instance' ), 11, 0 );
 
 			/* Instantiate secondary classes */
 			add_action( 'plugins_loaded',            array( 'WPAS_Tickets_List', 'get_instance' ), 11, 0 );
@@ -305,6 +309,7 @@ class Awesome_Support_Admin {
 		if ( wpas_is_plugin_page() ) {		
 
 			wp_enqueue_style( 'wpas-select2', WPAS_URL . 'assets/admin/css/vendor/select2.min.css', null, '3.5.2', 'all' );
+			wp_enqueue_style( 'wpas-flexboxgrid', WPAS_URL . 'assets/admin/css/vendor/flexboxgrid.min.css', null, '6.2.0', 'all' );
 			wp_enqueue_style( 'wpas-admin-styles', WPAS_URL . 'assets/admin/css/admin.css', array( 'wpas-select2' ), WPAS_VERSION );
 
 		}
@@ -935,7 +940,7 @@ class Awesome_Support_Admin {
 			return;
 		}
 
-		global $current_user;
+		global $current_user, $wpas_cf;
 
 		/**
 		 * Store possible logs
@@ -1038,26 +1043,11 @@ class Awesome_Support_Admin {
 
 		}
 
-		/**
-		 * wpas_save_custom_fields_before hook
-		 *
-		 * @since  3.0.0
-		 */
-		do_action( 'wpas_save_custom_fields_before', $post_id );
-
-		/* Now we can instantiate the save class and save */
-		$wpas_save = new WPAS_Save_Fields();
-		$saved = $wpas_save->save( $post_id );
-
-		/**
-		 * wpas_save_custom_fields_before hook
-		 *
-		 * @since  3.0.0
-		 */
-		do_action( 'wpas_save_custom_fields_after', $post_id );
+		/* Now we can save the custom fields */
+		$wpas_cf->save_custom_fields( $post_id, $_POST );
 
 		/* Log the action */
-		if ( !empty( $log ) ) {
+		if ( ! empty( $log ) ) {
 			wpas_log( $post_id, $log );
 		}
 
@@ -1131,6 +1121,11 @@ class Awesome_Support_Admin {
 			do_action( 'wpas_after_delete_dependency', $post->ID, $post );
 		}
 
+		/* Decrement the number of tickets open for this agent */
+		$agent_id = get_post_meta( $post_id, '_wpas_assignee', true );
+		$agent    = new WPAS_Agent( $agent_id );
+		$agent->ticket_minus();
+
 	}
 
 	public function system_tools() {
@@ -1148,6 +1143,10 @@ class Awesome_Support_Admin {
 			/* Clear all tickets metas */
 			case 'tickets_metas';
 				wpas_clear_tickets_metas();
+				break;
+
+			case 'agents_metas':
+				wpas_clear_agents_metas();
 				break;
 
 			case 'clear_taxonomies':
@@ -1189,7 +1188,9 @@ class Awesome_Support_Admin {
 	 * @return void
 	 */
 	public function remote_notifications() {
-		$notification = new TAV_Remote_Notification_Client( 76, '7f613a5dc7754971', 'http://getawesomesupport.com?post_type=notification' );
+		if ( ! defined( 'WPAS_REMOTE_NOTIFICATIONS_OFF' ) || true !== WPAS_REMOTE_NOTIFICATIONS_OFF ) {
+			new TAV_Remote_Notification_Client( 76, '7f613a5dc7754971', 'http://getawesomesupport.com?post_type=notification' );
+		}
 	}
 
 }

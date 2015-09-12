@@ -32,6 +32,7 @@ class Awesome_Support {
 
 		/* Ajax actions */
 		add_action( 'wp_ajax_nopriv_email_validation', array( $this, 'mailgun_check' ) );
+		add_filter( 'wp_link_query_args',              array( $this, 'remove_tinymce_links_internal' ),   10, 1 );
 
 		/**
 		 * Load the WP Editor Ajax class.
@@ -55,7 +56,6 @@ class Awesome_Support {
 			/**
 			 * Load internal methods.
 			 */
-			add_action( 'wp',                             array( $this, 'get_replies_object' ),              10, 0 ); // Generate the object used for the custom loop for displaying ticket replies
 			add_action( 'wpmu_new_blog',                  array( $this, 'activate_new_site' ),               10, 0 ); // Activate plugin when new blog is added
 			add_action( 'plugins_loaded',                 array( $this, 'load_plugin_textdomain' ),          11, 0 ); // Load the plugin textdomain
 			add_action( 'init',                           array( $this, 'init' ),                            11, 0 ); // Register main post type
@@ -66,7 +66,6 @@ class Awesome_Support {
 			add_action( 'wpas_after_registration_fields', array( $this, 'terms_and_conditions_checkbox' ),   10, 3 ); // Add terms & conditions checkbox
 			add_action( 'wpas_after_template',            array( $this, 'terms_and_conditions_modal' ),      10, 3 ); // Load the terms and conditions in a hidden div in the footer
 			add_action( 'wpas_after_template',            array( $this, 'credit' ),                          10, 3 );
-			add_action( 'wpas_before_template',           array( $this, 'trigger_templates_notifications' ), 10, 3 ); // Shows the notifications at the top of template files
 			add_filter( 'template_include',               array( $this, 'template_include' ),                10, 1 );
 			add_filter( 'wpas_logs_handles',              array( $this, 'default_log_handles' ),             10, 1 );
 			add_filter( 'authenticate',                   array( $this, 'email_signon' ),                    20, 3 );
@@ -178,7 +177,8 @@ class Awesome_Support {
 				wpas_save_values();
 
 				// Redirect to submit page
-				wp_redirect( add_query_arg( array( 'message' => 4 ), get_permalink( wpas_get_option( 'ticket_submit' ) ) ) );
+				wpas_add_error( 'nonce_verification_failed', __( 'The authenticity of your submission could not be validated. If this ticket is legitimate please try submitting again.', 'wpas' ) );
+				wp_redirect( wp_sanitize_redirect( home_url( $_POST['_wp_http_referer'] ) ) );
 				exit;
 			}
 
@@ -193,8 +193,8 @@ class Awesome_Support {
 				/**
 				 * Redirect to the newly created ticket
 				 */
-				$submit = wpas_get_option( 'ticket_submit' );
-				wpas_redirect( 'ticket_added_failed', add_query_arg( array( 'message' => 6 ), get_permalink( $submit ) ), $submit );
+				wpas_add_error( 'submission_error', __( 'The ticket couldn\'t be submitted for an unknown reason.', 'wpas' ) );
+				wp_redirect( wp_sanitize_redirect( home_url( $_POST['_wp_http_referer'] ) ) );
 				exit;
 
 			}
@@ -205,8 +205,8 @@ class Awesome_Support {
 				/**
 				 * Empty the temporary sessions
 				 */
-				unset( $_SESSION['wpas_submission_form'] );
-				unset( $_SESSION['wpas_submission_error'] );
+				global $wpas_session;
+				$wpas_session->clean( 'submission_form' );
 
 				/**
 				 * Redirect to the newly created ticket
@@ -242,7 +242,8 @@ class Awesome_Support {
 			$parent_id = intval( $_POST['ticket_id'] );
 
 			if ( empty( $_POST['wpas_user_reply'] ) && false === $can_submit_empty ) {
-				wpas_redirect( 'reply_not_added', add_query_arg( array( 'message' => wpas_create_notification( __( 'You cannot submit an empty reply.', 'wpas' ) ) ), get_permalink( $parent_id ) ), $parent_id );
+				wpas_add_error( 'reply_not_added', __( 'You cannot submit an empty reply.', 'wpas' ) );
+				wpas_redirect( 'reply_not_added', get_permalink( $parent_id ), $parent_id );
 				exit;
 			}
 
@@ -258,7 +259,8 @@ class Awesome_Support {
 			}
 
 			if ( false === $reply_id ) {
-				wpas_redirect( 'reply_added_failed', add_query_arg( array( 'message' => '7' ), get_permalink( $parent_id ) ) );
+				wpas_add_error( 'reply_added_failed', __( 'Your reply could not be submitted for an unknown reason.', 'wpas' ) );
+				wpas_redirect( 'reply_added_failed', get_permalink( $parent_id ) );
 				exit;
 			} else {
 
@@ -267,8 +269,12 @@ class Awesome_Support {
 				 */
 				delete_transient( "wpas_activity_meta_post_$parent_id" );
 
-				wpas_redirect( 'reply_added', add_query_arg( array( 'message' => '8' ), get_permalink( $parent_id ) ) . "#reply-$reply_id", $parent_id );
-				exit;
+				wpas_add_notification( 'reply_added', __( 'Your reply has been submitted. Your agent will reply ASAP.', 'wpas' ) );
+
+				if ( false !== $link = wpas_get_reply_link( $reply_id ) ) {
+					wpas_redirect( 'reply_added', $link );
+					exit;
+				}
 			}
 		}
 
@@ -678,48 +684,22 @@ class Awesome_Support {
 	 */
 	protected function get_javascript_object() {
 
+		$upload_max_files = (int) wpas_get_option( 'attachments_max' );
+		$upload_max_size  = (int) wpas_get_option( 'filesize_max' );
+
 		$object = array(
-			'ajaxurl'    => admin_url( 'admin-ajax.php' ),
-			'emailCheck' => true === boolval( wpas_get_option( 'enable_mail_check', false ) ) ? 'true' : 'false',
+			'ajaxurl'                => admin_url( 'admin-ajax.php' ),
+			'emailCheck'             => true === boolval( wpas_get_option( 'enable_mail_check', false ) ) ? 'true' : 'false',
+			'fileUploadMax'          => $upload_max_files,
+			'fileUploadSize'         => $upload_max_size * 1048576, // We base our calculation on binary prefixes
+			'fileUploadMaxError'     => __( sprintf( 'You can only upload a maximum of %d files', $upload_max_files ), 'wpas' ),
+			'fileUploadMaxSizeError' => array(
+				__( 'The following file(s) are too big to be uploaded:', 'wpas' ),
+				sprintf( __( 'The maximum file size allowed for one file is %d MB', 'wpas' ), $upload_max_size )
+			),
 		);
 
 		return $object;
-
-	}
-
-	/**
-	 * Construct the replies query.
-	 *
-	 * The replies query is used as a custom loop to display
-	 * a ticket's replies in a clean way. The resulting object
-	 * is made global as $wpas_replies.
-	 *
-	 * @since  3.0.0
-	 * @return void
-	 */
-	public function get_replies_object() {
-
-		global $wp_query, $wpas_replies;
-
-		if ( isset( $wp_query->post ) && 'ticket' === $wp_query->post->post_type ) {
-
-			$args = apply_filters( 'wpas_replies_object_args', array(
-				'post_parent'            => $wp_query->post->ID,
-				'post_type'              => 'ticket_reply',
-				'post_status'            => array( 'read', 'unread' ),
-				'order'                  => wpas_get_option( 'replies_order', 'ASC' ),
-				'orderby'                => 'date',
-				'posts_per_page'         => -1,
-				'no_found_rows'          => false,
-				'cache_results'          => false,
-				'update_post_term_cache' => false,
-				'update_post_meta_cache' => false,
-
-			) );
-
-			$wpas_replies = new WP_Query( $args );
-
-		}
 
 	}
 
@@ -958,26 +938,29 @@ class Awesome_Support {
 	}
 
 	/**
-	 * Shows notifications at the top of any template file.
+	 * Filter the link query arguments to remove completely internal links from the list.
 	 *
-	 * @since 3.1.11
-	 * @return boolean True if a notification was found, false otherwise
+	 * @since 3.2.0
+	 *
+	 * @param array $query An array of WP_Query arguments.
+	 *
+	 * @return array $query
 	 */
-	public function trigger_templates_notifications() {
+	public function remove_tinymce_links_internal( $query ) {
+
 		/**
-		 * Display possible messages to the visitor.
+		 * Getting the post ID this way is quite dirty but it seems to be the only way
+		 * as we are in an Ajax query and the only given parameter is the $query
 		 */
-		if ( ! isset( $_GET['message'] ) ) {
-			return false;
+		$url     = wp_get_referer();
+		$post_id = url_to_postid( $url );
+
+		if ( $post_id === wpas_get_option( 'ticket_submit' ) ) {
+			$query['post_type'] = array( 'none' );
 		}
 
-		if ( is_numeric( $_GET['message'] ) ) {
-			wpas_notification( false, $_GET['message'] );
-		} else {
-			wpas_notification( 'decode', $_GET['message'] );
-		}
+		return $query;
 
-		return true;
 	}
 
 }
