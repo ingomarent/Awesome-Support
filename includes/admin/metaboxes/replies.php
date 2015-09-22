@@ -129,7 +129,7 @@ $status = get_post_meta( $post->ID, '_wpas_status', true );
 
 									<?php
 									/* Filter the content before we display it */
-									$content = make_clickable( apply_filters( 'the_content', $row->post_content ) );
+									$content = apply_filters( 'the_content', $row->post_content );
 
 									/* The content displayed to agents */
 									echo '<div class="wpas-reply-content" id="wpas-reply-' . $row->ID . '">';
@@ -141,7 +141,7 @@ $status = get_post_meta( $post->ID, '_wpas_status', true );
 									 */
 									do_action( 'wpas_backend_reply_content_before', $row->ID );
 
-									echo $content;
+									echo wp_kses( $content, wp_kses_allowed_html( 'post' ) );
 
 									/**
 									 * wpas_backend_reply_content_after hook

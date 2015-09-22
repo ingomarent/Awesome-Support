@@ -557,7 +557,7 @@ function wpas_tickets_dropdown( $args = array(), $status = '' ) {
 	);
 
 	/* List all tickets */
-	$tickets = get_tickets( $status );
+	$tickets = wpas_get_tickets( $status );
 	$options = '';
 
 	foreach ( $tickets as $ticket ) {
@@ -751,13 +751,44 @@ function wpas_get_submission_page_url( $post_id = false ) {
 
 	$submission = wpas_get_option( 'ticket_submit' );
 
+	if ( ! is_array( $submission ) ) {
+		$submission = array_filter( (array) $submission );
+	}
+
+	if ( empty( $submission ) ) {
+		return '';
+	}
+
 	if ( is_int( $post_id ) && in_array( $post_id, $submission ) ) {
 		$url = get_permalink( (int) $post_id );
 	} else {
 		$url = get_permalink( (int) $submission[0] );
 	}
 
-	return esc_url( $url );
+	return wp_sanitize_redirect( $url );
+
+}
+
+/**
+ * Get URL of the tickets list page
+ *
+ * @since 3.2.2
+ *
+ * @return string
+ */
+function wpas_get_tickets_list_page_url() {
+
+	$list = wpas_get_option( 'ticket_list' );
+
+	if ( empty( $list ) ) {
+		return '';
+	}
+
+	if ( is_array( $list ) && ! empty( $list ) ) {
+		$list = $list[0];
+	}
+
+	return wp_sanitize_redirect( get_permalink( (int) $list ) );
 
 }
 

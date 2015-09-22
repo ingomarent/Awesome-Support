@@ -336,7 +336,9 @@ class Awesome_Support_Admin {
 		$action = filter_input( INPUT_GET, 'action', FILTER_SANITIZE_STRING );
 
 		if ( 'wpas-about' === $page ) {
-			add_thickbox();
+			wp_enqueue_script( 'wpas-admin-about-linkify', WPAS_URL . 'assets/admin/js/vendor/linkify.min.js', array( 'jquery' ), WPAS_VERSION );
+			wp_enqueue_script( 'wpas-admin-about-linkify-jquery', WPAS_URL . 'assets/admin/js/vendor/linkify-jquery.min.js', array( 'jquery' ), WPAS_VERSION );
+			wp_enqueue_script( 'wpas-admin-about-moment', WPAS_URL . 'assets/admin/js/vendor/moment.min.js', array( 'jquery' ), WPAS_VERSION );
 			wp_enqueue_script( 'wpas-admin-about-script', WPAS_URL . 'assets/admin/js/admin-about.js', array( 'jquery' ), WPAS_VERSION );
 		}
 
@@ -665,7 +667,7 @@ class Awesome_Support_Admin {
 			);
 		}
 
-		$count = count( get_tickets( 'open', $args ) );
+		$count = count( wpas_get_tickets( 'open', $args ) );
 
 		if ( 0 === $count ) {
 			return false;
@@ -1189,7 +1191,7 @@ class Awesome_Support_Admin {
 	 */
 	public function remote_notifications() {
 		if ( ! defined( 'WPAS_REMOTE_NOTIFICATIONS_OFF' ) || true !== WPAS_REMOTE_NOTIFICATIONS_OFF ) {
-			new TAV_Remote_Notification_Client( 76, '7f613a5dc7754971', 'http://getawesomesupport.com?post_type=notification' );
+			new TAV_Remote_Notification_Client( 89, '01710ef695c7a7fa', 'https://getawesomesupport.com' );
 		}
 	}
 

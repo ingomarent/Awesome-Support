@@ -13,12 +13,16 @@ function wpas_register_account( $data = false ) {
 
 	/* Make sure registrations are open */
 	$registration = boolval( wpas_get_option( 'allow_registrations', true ) );
+	$registration = wpas_get_option( 'allow_registrations', 'allow' );
 
 	if ( true !== $registration ) {
 		wp_redirect( add_query_arg( array(
 			'message' => wpas_create_notification( __( 'Registrations are currently not allowed.', 'wpas' ) ),
 			get_permalink( $post->ID )
 		) ) );
+	if ( 'allow' !== $registration ) {
+		wpas_add_error( 'registration_not_allowed', __( 'Registrations are currently not allowed.', 'wpas' ) );
+		wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 		exit;
 	}
 
@@ -47,6 +51,8 @@ function wpas_register_account( $data = false ) {
 			'message' => wpas_create_notification( $notice ),
 			get_permalink( $post->ID )
 		) ) );
+		wpas_add_error( 'registration_error', $notice );
+		wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 
 		exit;
 
@@ -67,6 +73,8 @@ function wpas_register_account( $data = false ) {
 			'message' => wpas_create_notification( __( 'You did not accept the terms and conditions.', 'wpas' ) ),
 			get_permalink( $post->ID )
 		) ) );
+		wpas_add_error( 'accept_terms_conditions', __( 'You did not accept the terms and conditions.', 'wpas' ) );
+		wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 		exit;
 	}
 
@@ -76,6 +84,8 @@ function wpas_register_account( $data = false ) {
 			'message' => wpas_create_notification( __( 'You didn\'t correctly fill all the fields.', 'wpas' ) ),
 			get_permalink( $post->ID )
 		) ) );
+		wpas_add_error( 'missing_fields', __( 'You didn\'t correctly fill all the fields.', 'wpas' ) );
+		wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 		exit;
 	}
 
@@ -134,6 +144,10 @@ function wpas_register_account( $data = false ) {
 			'message' => wpas_create_notification( $error ),
 			get_permalink( $post->ID )
 		) ) );
+
+		wpas_add_error( 'missing_fields', $error );
+		wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
+
 		exit;
 
 	} else {
@@ -151,7 +165,8 @@ function wpas_register_account( $data = false ) {
 		unset( $_SESSION['wpas_registration_form'] );
 
 		if ( true === apply_filters( 'wpas_new_user_notification', true ) ) {
-		wp_new_user_notification( $user_id, $pwd );
+			wp_new_user_notification( $user_id, $pwd );
+			wp_new_user_notification( $user_id );
 		}
 
 		if ( headers_sent() ) {
@@ -159,6 +174,8 @@ function wpas_register_account( $data = false ) {
 				'message' => wpas_create_notification( __( 'Your account has been created. Please log-in.', 'wpas' ) ),
 				get_permalink( $post->ID )
 			) ) );
+			wpas_add_notification( 'account_created', __( 'Your account has been created. Please log-in.', 'wpas' ) );
+			wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 			exit;
 		}
 
@@ -212,6 +229,8 @@ function wpas_try_login() {
 		if ( is_wp_error( $login ) ) {
 			$error = $login->get_error_message();
 			wp_redirect( add_query_arg( array( 'message' => urlencode( base64_encode( json_encode( $error ) ) ) ), get_permalink( $post->ID ) ) );
+			wpas_add_error( 'login_failed', $error );
+			wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 			exit;
 		}
 
@@ -220,12 +239,16 @@ function wpas_try_login() {
 		if ( is_wp_error( $login ) ) {
 			$error = $login->get_error_message();
 			wp_redirect( add_query_arg( array( 'message' => urlencode( base64_encode( json_encode( $error ) ) ) ), get_permalink( $post->ID ) ) );
+			wpas_add_error( 'login_failed', $error );
+			wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 			exit;
 		} elseif ( is_a( $login, 'WP_User' ) ) {
 			wp_redirect( get_permalink( $post->ID ) );
 			exit;
 		} else {
 			wp_redirect( add_query_arg( array( 'message' => urlencode( base64_encode( json_encode( __( 'We were unable to log you in for an unknown reason.', 'wpas' ) ) ) ) ), get_permalink( $post->ID ) ) );
+			wpas_add_error( 'login_failed', __( 'We were unable to log you in for an unknown reason.', 'wpas' ) );
+			wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 			exit;
 		}
 
@@ -258,7 +281,7 @@ function wpas_can_view_ticket( $post_id ) {
 	if ( is_user_logged_in() ) {
 		if ( get_current_user_id() === $author_id && current_user_can( 'view_ticket' ) || current_user_can( 'edit_ticket' ) ) {
 			$can = true;
-	}
+		}
 	}
 
 	return apply_filters( 'wpas_can_view_ticket', $can, $post_id, $author_id );
@@ -339,10 +362,39 @@ function wpas_get_user_nice_role( $role ) {
 }
 
 function wpas_can_submit_ticket() {
+/**
+ * Check if the current user has the permission to open a ticket
+ *
+ * If a ticket ID is given we make sure the ticket author is the current user.
+ * This is used for checking if a user can re-open a ticket.
+ *
+ * @param int $ticket_id
+ *
+ * @return bool
+ */
+function wpas_can_submit_ticket( $ticket_id = 0 ) {
 
 	$can = true;
+	if ( ! is_user_logged_in() ) {
+		return false;
+	}
 
 	return apply_filters( 'wpas_can_submit_ticket', $can );
+	if ( ! current_user_can( 'create_ticket' ) ) {
+		return false;
+	}
+
+	if ( 0 !== $ticket_id ) {
+
+		$ticket = get_post( $ticket_id );
+
+		if ( is_object( $ticket ) && is_a( $ticket, 'WP_Post' ) && get_current_user_id() !== (int) $ticket->post_author ) {
+			return false;
+		}
+
+	}
+
+	return apply_filters( 'wpas_can_submit_ticket', true );
 
 }
 
@@ -369,15 +421,15 @@ function wpas_get_users( $args = array() ) {
 	$args = wp_parse_args( $args, $defaults );
 
 	/* Get the hash of the arguments that's used for caching the result. */
-	//$hash = substr( md5( serialize( $args ) ), 0, 10 ); // Limit the length of the hash in order to avoid issues with option_name being too long in the database (https://core.trac.wordpress.org/ticket/15058)
+	$hash = substr( md5( serialize( $args ) ), 0, 10 ); // Limit the length of the hash in order to avoid issues with option_name being too long in the database (https://core.trac.wordpress.org/ticket/15058)
 
 	/* Check if we have a result already cached. */
-	//$result = false;//get_transient( "wpas_list_users_$hash" );
+	$result = get_transient( "wpas_list_users_$hash" );
 
 	/* If there is a cached result we return it and don't run the expensive query. */
-	/*if ( false !== $result ) {
-			return apply_filters( 'wpas_get_users', get_users( array( 'include' => (array) $result ) ) );
-		}
+	if ( false !== $result ) {
+		return apply_filters( 'wpas_get_users', get_users( array( 'include' => (array) $result ) ) );
+	}
 
 	/* Get all WordPress users */
 	$all_users = get_users();
@@ -423,6 +475,7 @@ function wpas_get_users( $args = array() ) {
 	}
 
 	/* Let's cache the result so that we can avoid running this query too many times. */
+	set_transient( "wpas_list_users_$hash", $users_ids, apply_filters( 'wpas_list_users_cache_expiration', 60 * 60 * 24 ) );
 
 	return apply_filters( 'wpas_get_users', $list );
 
@@ -591,4 +644,33 @@ function wpas_support_users_dropdown( $args = array() ) {
 	$args['cap_exclude'] = 'edit_ticket';
 	$args['cap']         = 'create_ticket';
 	echo wpas_users_dropdown( $args );
+}
+
+/**
+ * Wrapper function to easily get a user tickets
+ *
+ * This function is a wrapper for wpas_get_user_tickets() with the user ID preset
+ *
+ * @since 3.2.2
+ *
+ * @param int    $user_id
+ * @param string $ticket_status
+ * @param string $post_status
+ *
+ * @return array
+ */
+function wpas_get_user_tickets( $user_id = 0, $ticket_status = 'open', $post_status = 'any' ) {
+
+	if ( 0 === $user_id ) {
+		$user_id = get_current_user_id();
+	}
+
+	$args = array(
+		'post_author' => $user_id,
+	);
+
+	$tickets = wpas_get_tickets( $ticket_status, $args, $post_status );
+
+	return $tickets;
+
 }

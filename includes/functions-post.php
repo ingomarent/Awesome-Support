@@ -265,22 +265,47 @@ function wpas_insert_ticket( $data = array(), $post_id = false, $agent_id = fals
  * the addition of the ticket status.
  *
  * @since  3.0.0
- * @param  string $status Ticket status (open or closed)
- * @param  array  $args   Additional arguments (see WP_Query)
- * @return array          Array of tickets, empty array if no tickets found
+ *
+ * @param string       $ticket_status Ticket status (open or closed)
+ * @param array        $args          Additional arguments (see WP_Query)
+ * @param string|array $post_status   Ticket state
+ *
+ * @return array               Array of tickets, empty array if no tickets found
  */
-function get_tickets( $status = 'open', $args = array() ) {
+function wpas_get_tickets( $ticket_status = 'open', $args = array(), $post_status = 'any' ) {
 
-	$post_status       = wpas_get_post_status();
-	$post_status_clean = array();
+	$custom_post_status = wpas_get_post_status();
+	$post_status_clean  = array();
 
-	foreach ( $post_status as $status_id => $status_label ) {
-		$post_status_clean[] = $status_id;
+	if ( empty( $post_status ) ) {
+		$post_status = 'any';
+	}
+
+	if ( ! is_array( $post_status ) ) {
+		if ( 'any' === $post_status ) {
+
+			foreach ( $custom_post_status as $status_id => $status_label ) {
+				$post_status_clean[] = $status_id;
+			}
+
+			$post_status = $post_status_clean;
+
+		} else {
+			if ( ! array_key_exists( $post_status, $custom_post_status ) ) {
+				$post_status = ''; // This basically will return no result if the post status specified doesn't exist
+			}
+		}
+	} else {
+		foreach ( $post_status as $key => $status ) {
+			if ( ! array_key_exists( $status, $custom_post_status ) ) {
+				unset( $post_status[ $key ] );
+			}
+		}
 	}
 
 	$defaults = array(
 		'post_type'              => 'ticket',
-		'post_status'            => $post_status_clean,
+		'post_status'            => $post_status,
 		'posts_per_page'         => -1,
 		'no_found_rows'          => false,
 		'cache_results'          => true,
@@ -290,12 +315,14 @@ function get_tickets( $status = 'open', $args = array() ) {
 
 	$args  = wp_parse_args( $args, $defaults );
 
-	if ( in_array( $status, array( 'open', 'closed' ) ) ) {
-		$args['meta_query'][] = array(
-			'key' => '_wpas_status',
-			'value' => $status,
-			'compare' => '='
-		);
+	if ( 'any' !== $ticket_status ) {
+		if ( in_array( $ticket_status, array( 'open', 'closed' ) ) ) {
+			$args['meta_query'][] = array(
+				'key'     => '_wpas_status',
+				'value'   => $ticket_status,
+				'compare' => '='
+			);
+		}
 	}
 
 	$query = new WP_Query( $args );
@@ -706,6 +733,7 @@ function wpas_insert_reply( $data, $post_id = false ) {
  * @param integer      $post_id ID of the post (ticket) to get the replies from
  * @param string|array $status  Status of the replies to get
  * @param array        $args    Additional arguments (see WP_Query)
+ * @param string       $output  Type of data to return. wp_query for the WP_Query object, replies for the WP_Query posts
  *
  * @return array|WP_Query
  */
@@ -978,12 +1006,18 @@ function wpas_update_ticket_status( $post_id, $status ) {
  * @since  3.0.2
  *
  * @param  integer $ticket_id ID of the ticket to close
+ * @param int      $user_id   ID of the user who closed the ticket
  *
  * @return integer|boolean            ID of the post meta if exists, true on success or false on failure
  */
-function wpas_close_ticket( $ticket_id ) {
+function wpas_close_ticket( $ticket_id, $user_id = 0 ) {
 
 	global $current_user;
+
+	// Set the user who closed the ticket to the current user if nothing is specified
+	if ( 0 === $user_id ) {
+		$user_id = $current_user->ID;
+	}
 
 	if ( ! current_user_can( 'close_ticket' ) ) {
 		wp_die( __( 'You do not have the capacity to close this ticket', 'wpas' ), __( 'Can’t close ticket', 'wpas' ), array( 'back_link' => true ) );
@@ -1008,7 +1042,7 @@ function wpas_close_ticket( $ticket_id ) {
 		 *
 		 * @since  3.0.0
 		 */
-		do_action( 'wpas_after_close_ticket', $ticket_id, $update );
+		do_action( 'wpas_after_close_ticket', $ticket_id, $update, $user_id );
 
 		if ( is_admin() ) {
 
@@ -1021,7 +1055,7 @@ function wpas_close_ticket( $ticket_id ) {
 			 * @param integer $user_id   ID of the user who did the action
 			 * @param boolean $update    True on success, false on fialure
 			 */
-			do_action( 'wpas_after_close_ticket_admin', $ticket_id, $current_user->ID, $update );
+			do_action( 'wpas_after_close_ticket_admin', $ticket_id, $user_id, $update );
 
 		} else {
 
@@ -1034,7 +1068,7 @@ function wpas_close_ticket( $ticket_id ) {
 			 * @param integer $user_id   ID of the user who did the action
 			 * @param boolean $update    True on success, false on fialure
 			 */
-			do_action( 'wpas_after_close_ticket_public', $ticket_id, $current_user->ID, $update );
+			do_action( 'wpas_after_close_ticket_public', $ticket_id, $user_id, $update );
 
 		}
 
@@ -1115,5 +1149,67 @@ function wpas_edit_reply_editor_ajax() {
 	wp_editor( $editor_content, $editor_id, $settings );
 
 	die();
+
+}
+
+/**
+ * Get the tickets count by ticket status
+ *
+ * @since 3.2
+ *
+ * @param string $state
+ * @param string $status
+ *
+ * @return int Tickets count
+ */
+function wpas_get_ticket_count_by_status( $state = '', $status = 'open' ) {
+
+	$args        = array();
+	$post_status = wpas_get_post_status();
+
+	// Make the state an array
+	if ( ! is_array( $state ) ) {
+		$state = array_filter( (array) $state );
+	}
+
+	// Sanitize the status
+	if ( ! in_array( $status, array( 'open', 'closed', 'any' ) ) ) {
+		$status = 'open';
+	}
+
+	// Restrict tickets to the specified status
+	if ( ! empty( $state ) ) {
+
+		// Force open status if a state is defined. Who cares about counting closed "In Progress" tickets.
+		$status = 'open';
+
+		// Make sure the requested ticket state is declared
+		foreach ( $state as $key => $s ) {
+			if ( ! array_key_exists( $s, $post_status ) ) {
+				unset( $state[ $key ] );
+			}
+		}
+
+		$args['post_status'] = $state;
+
+	}
+
+	// Maybe restrict the count to the current user only
+	if (
+		current_user_can( 'administrator' ) && false === (bool) wpas_get_option( 'admin_see_all' )
+		|| ! current_user_can( 'administrator' ) && current_user_can( 'edit_ticket' ) && false === (bool) wpas_get_option( 'agent_see_all' )
+	) {
+
+		global $current_user;
+
+		$args['meta_query'][] = array(
+			'key'     => '_wpas_assignee',
+			'value'   => $current_user->ID,
+			'compare' => '=',
+		);
+
+	}
+
+	return count( wpas_get_tickets( $status, $args ) );
 
 }

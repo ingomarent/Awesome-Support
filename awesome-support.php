@@ -10,7 +10,7 @@
  * Plugin Name:       Awesome Support
  * Plugin URI:        http://getawesomesupport.com
  * Description:       Awesome Support is a great ticketing system that will help you improve your customer satisfaction by providing a unique customer support experience.
- * Version:           3.1.12
+ * Version:           3.2.2
  * Author:            ThemeAvenue
  * Author URI:        http://themeavenue.net
  * Text Domain:       wpas
@@ -28,10 +28,11 @@ if ( ! defined( 'WPINC' ) ) {
  * Shortcuts
  *----------------------------------------------------------------------------*/
 
-define( 'WPAS_VERSION',           '3.1.12' );
+define( 'WPAS_VERSION',           '3.2.2' );
 define( 'WPAS_DB_VERSION',        '1' );
 define( 'WPAS_URL',               trailingslashit( plugin_dir_url( __FILE__ ) ) );
 define( 'WPAS_PATH',              trailingslashit( plugin_dir_path( __FILE__ ) ) );
+define( 'WPAS_ROOT',              trailingslashit( dirname( plugin_basename( __FILE__ ) ) ) );
 define( 'WPAS_TEMPLATE_PATH',     'awesome-support/' );
 define( 'WPAS_ADMIN_ASSETS_URL',  trailingslashit( plugin_dir_url( __FILE__ ) . 'assets/admin/' ) );
 define( 'WPAS_ADMIN_ASSETS_PATH', trailingslashit( plugin_dir_path( __FILE__ ) . 'assets/admin/' ) );
@@ -79,8 +80,8 @@ add_action( 'plugins_loaded', array( 'Awesome_Support', 'get_instance' ) );
  * A couple of addons are built in the plugin.
  * We load them here.
  */
-require_once( WPAS_PATH . 'includes/addons/file-uploader/class-file-uploader.php' );
-require_once( WPAS_PATH . 'includes/addons/class-mailgun-email-check.php' );
+require_once( WPAS_PATH . 'includes/file-uploader/class-file-uploader.php' );
+require_once( WPAS_PATH . 'includes/class-mailgun-email-check.php' );
 
 /* Load custom fields dependencies */
 require_once( WPAS_PATH . 'includes/custom-fields/class-custom-field.php' );

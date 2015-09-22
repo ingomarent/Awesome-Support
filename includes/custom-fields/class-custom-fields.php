@@ -90,6 +90,8 @@ class WPAS_Custom_Fields {
 		/* Convert the callback for backwards compatibility */
 		if ( ! empty( $arguments['callback'] ) ) {
 
+			_deprecated_argument( 'WPAS_Custom_Fields::add_field()', '3.2', sprintf( __( 'Please use %s to register your custom field type', 'wpas' ), '<code>field_type</code>' ) );
+
 			switch ( $arguments['callback'] ) {
 
 				case 'taxonomy';
@@ -479,7 +481,7 @@ class WPAS_Custom_Fields {
 				);
 
 				if ( isset( $_GET[ $tax_slug ] ) ) {
-					$args['selected'] = $_GET[ $tax_slug ];
+					$args['selected'] = filter_input( INPUT_GET, $tax_slug, FILTER_SANITIZE_STRING );
 				}
 
 				wp_dropdown_categories( $args );
@@ -507,9 +509,9 @@ class WPAS_Custom_Fields {
 			echo '';
 		}
 
-		$this_sort       = isset( $_GET['wpas_status'] ) ? $_GET['wpas_status'] : '';
+		$this_sort       = isset( $_GET['wpas_status'] ) ? filter_input( INPUT_GET, 'wpas_status', FILTER_SANITIZE_STRING ) : '';
 		$all_selected    = ( '' === $this_sort ) ? 'selected="selected"' : '';
-		$open_selected   = ( 'open' === $this_sort ) ? 'selected="selected"' : '';
+		$open_selected   = ( ! isset( $_GET['wpas_status'] ) || 'open' === $this_sort ) ? 'selected="selected"' : '';
 		$closed_selected = ( 'closed' === $this_sort ) ? 'selected="selected"' : '';
 		$dropdown        = '<select id="wpas_status" name="wpas_status">';
 		$dropdown        .= "<option value='' $all_selected>" . __( 'Any Status', 'wpas' ) . "</option>";
@@ -522,10 +524,10 @@ class WPAS_Custom_Fields {
 	}
 
 	/**
-	 * Convert taxonomy ID into term.
+	 * Convert taxonomy term ID into term slug.
 	 *
-	 * When filtering, WordPress uses the ID by default in the query but
-	 * that doesn't work. We need to convert it to the taxonomy term.
+	 * When filtering, WordPress uses the term ID by default in the query but
+	 * that doesn't work. We need to convert it to the taxonomy term slug.
 	 *
 	 * @param  object $query WordPress current main query
 	 *
@@ -551,7 +553,12 @@ class WPAS_Custom_Fields {
 
 					$term = get_term_by( 'id', $value, $arg );
 
-					if ( false !== $term ) {
+					// Depending on where the filter was triggered (dropdown or click on a term) it uses either the term ID or slug. Let's see if this term slug exists
+					if ( is_null( $term ) ) {
+						$term = get_term_by( 'slug', $value, $arg );
+					}
+
+					if ( ! empty( $term ) ) {
 						$query->query_vars[ $arg ] = $term->slug;
 					}
 

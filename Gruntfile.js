@@ -105,6 +105,34 @@ module.exports = function (grunt) {
 			}
 		},
 
+		/*
+		Bump version number
+		@author https://www.npmjs.com/package/grunt-version
+		 */
+		version: {
+			pluginVersion: {
+				options: {
+					prefix: 'Version:\\s+'
+				},
+				src: [
+					'awesome-support.php'
+				]
+			},
+			pluginConstant: {
+				options: {
+					prefix: 'define\\(\\s*\'WPAS_VERSION\',\\s*\''
+				},
+				src: [
+					'awesome-support.php'
+				]
+			},
+			packageJson: {
+				src: [
+					'package.json'
+				]
+			}
+		},
+
 		/**
 		Creates a clean zip archive for production
 		@author https://github.com/gruntjs/grunt-contrib-compress
@@ -121,6 +149,7 @@ module.exports = function (grunt) {
 						'**',
 						'!node_modules/**',
 						'!tests/**',
+						'!.tx/**',
 						'!.gitignore',
 						'!.travis.yml',
 						'!apigen.neon',
@@ -129,6 +158,7 @@ module.exports = function (grunt) {
 						'!tests/**',
 						'!logs/**',
 						'!README.md',
+						'!CONTRIBUTING.md',
 						'!Gruntfile.js',
 						'!package.json',
 						'!*.sublime-workspace',
@@ -136,6 +166,83 @@ module.exports = function (grunt) {
 						'!awesome-support-<%= pkg.version %>.zip'
 					]
 				}]
+			}
+		},
+
+		/**
+		 Updates the translation catalog
+		 @author https://www.npmjs.com/package/grunt-wp-i18n
+		 */
+		makepot: {
+			target: {
+				options: {
+					domainPath: '/languages/',
+					exclude: ['assets/.*', 'node_modules/.*', 'vendor/.*', 'tests/.*', 'includes/admin/views/system-status.php'],
+					mainFile: 'awesome-support.php',
+					potComments: 'N2Clic Limited',
+					potFilename: 'wpas.pot',
+					potHeaders: {
+						poedit: true,
+						'x-poedit-keywordslist': true
+					},
+					processPot: function (pot, options) {
+						pot.headers['report-msgid-bugs-to'] = 'https://getawesomesupport.com.com/';
+						pot.headers['last-translator'] = 'ThemeAvenue (https://themeavenue.net/)';
+						pot.headers['language-team'] = 'ThemeAvenue <hello@themeavenue.net>';
+						pot.headers['language'] = 'en_US';
+						var translation,
+							excluded_meta = [
+								'Plugin Name of the plugin/theme',
+								'Plugin URI of the plugin/theme',
+								'Author of the plugin/theme',
+								'Author URI of the plugin/theme'
+							];
+						for (translation in pot.translations['']) {
+							if ('undefined' !== typeof pot.translations[''][translation].comments.extracted) {
+								if (excluded_meta.indexOf(pot.translations[''][translation].comments.extracted) >= 0) {
+									console.log('Excluded meta: ' + pot.translations[''][translation].comments.extracted);
+									delete pot.translations[''][translation];
+								}
+							}
+						}
+						return pot;
+					},
+					type: 'wp-plugin',
+					updateTimestamp: true
+				}
+			}
+		},
+
+		/**
+		 Convert PO files into MO files
+		 @author https://www.npmjs.com/package/grunt-potomo
+		 */
+		potomo: {
+			dist: {
+				options: {
+					poDel: true
+				},
+				files: [{
+					expand: true,
+					cwd: 'languages',
+					src: ['*.po'],
+					dest: 'languages',
+					ext: '.mo',
+					nonull: true
+				}]
+			}
+		},
+
+		/**
+		 Run shell commands
+		 @author https://github.com/jharding/grunt-exec
+		 */
+		exec: {
+			txpull: { // Pull Transifex translation - grunt exec:txpull
+				cmd: 'tx pull -a -f' // Change the percentage with --minimum-perc=yourvalue
+			},
+			txpush: { // Push pot to Transifex - grunt exec:txpush_s
+				cmd: 'tx push -s'
 			}
 		},
 
@@ -161,6 +268,12 @@ module.exports = function (grunt) {
 
 	grunt.registerTask('default', ['jshint', 'concat', 'uglify', 'less', 'autoprefixer', 'combine_mq', 'cssmin', 'watch']);
 	grunt.registerTask('build', ['jshint', 'concat', 'uglify', 'less', 'autoprefixer', 'combine_mq', 'cssmin']);
-	grunt.registerTask('zip', ['composer:update', 'compress']);
+	grunt.registerTask('txpull', ['exec:txpull', 'potomo']);
+	grunt.registerTask('txpush', ['makepot', 'exec:txpush']);
+
+	grunt.registerTask('release', ['composer:install', 'txpull', 'compress']);
+	grunt.registerTask('release_patch', ['version:patch', 'release']);
+	grunt.registerTask('release_minor', ['version:minor', 'release']);
+	grunt.registerTask('release_major', ['version:major', 'release']);
 
 };

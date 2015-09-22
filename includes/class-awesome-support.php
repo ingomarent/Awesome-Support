@@ -69,12 +69,14 @@ class Awesome_Support {
 			add_filter( 'template_include',               array( $this, 'template_include' ),                10, 1 );
 			add_filter( 'wpas_logs_handles',              array( $this, 'default_log_handles' ),             10, 1 );
 			add_filter( 'authenticate',                   array( $this, 'email_signon' ),                    20, 3 );
+			add_filter( 'plugin_locale',                  array( $this, 'change_plugin_locale' ),            10, 2 );
+			add_filter( 'the_content',                    array( $this, 'make_links_clickable' ),            10, 1 );
 
 			/* Hook all e-mail notifications */
 			add_action( 'wpas_open_ticket_after',  array( $this, 'notify_confirmation' ), 10, 2 );
 			add_action( 'wpas_ticket_assigned',    array( $this, 'notify_assignment' ),   10, 2 );
 			add_action( 'wpas_add_reply_after',    array( $this, 'notify_reply' ),        10, 2 );
-			add_action( 'wpas_after_close_ticket', array( $this, 'notify_close' ),        10, 1 );
+			add_action( 'wpas_after_close_ticket', array( $this, 'notify_close' ),        10, 3 );
 
 			/**
 			 * Modify the ticket single page content.
@@ -168,7 +170,7 @@ class Awesome_Support {
 		 *
 		 * @since  3.0.0
 		 */
-		if ( isset( $_POST['wpas_title'] ) ) {
+		if ( ! is_admin() && isset( $_POST['wpas_title'] ) ) {
 
 			// Verify the nonce first
 			if ( ! isset( $_POST['wpas_nonce'] ) || ! wp_verify_nonce( $_POST['wpas_nonce'], 'new_ticket' ) ) {
@@ -359,11 +361,21 @@ class Awesome_Support {
 			case 'reopen':
 
 				if ( isset( $_GET['ticket_id'] ) ) {
-					wpas_reopen_ticket( $_GET['ticket_id'] );
-				}
 
-				wpas_redirect( 'ticket_reopen', add_query_arg( array( 'message' => '9' ), get_permalink( intval( $_GET['ticket_id'] ) ) ), intval( $_GET['ticket_id'] ) );
-				exit;
+					$ticket_id = filter_input( INPUT_GET, 'ticket_id', FILTER_SANITIZE_NUMBER_INT );
+
+					if ( ! wpas_can_submit_ticket( $ticket_id ) && ! current_user_can( 'edit_ticket' ) ) {
+						wpas_add_error( 'cannot_reopen_ticket', __( 'You are not allowed to re-open this ticket', 'wpas' ) );
+						wpas_redirect( 'ticket_reopen', wpas_get_tickets_list_page_url() );
+						exit;
+					}
+
+					wpas_reopen_ticket( $ticket_id );
+					wpas_add_notification( 'ticket_reopen', __( 'The ticket has been successfully re-opened.', 'wpas' ) );
+					wpas_redirect( 'ticket_reopen', wp_sanitize_redirect( get_permalink( $ticket_id ) ) );
+					exit;
+
+				}
 
 			break;
 
@@ -598,14 +610,46 @@ class Awesome_Support {
 	 */
 	public function load_plugin_textdomain() {
 
-		global $locale;
+		$lang_dir  = WPAS_ROOT . 'languages/';
+		$land_path = WPAS_PATH . 'languages/';
+		$locale    = apply_filters( 'plugin_locale', get_locale(), 'wpas' );
+		$mofile    = "wpas-$locale.mo";
+
+		if ( file_exists( $land_path . $mofile ) ) {
+			$language = load_textdomain( 'wpas', $land_path . $mofile );
+		} else {
+			$language = load_plugin_textdomain( 'wpas', false, $lang_dir );
+		}
+
+		return $language;
+
+	}
+
+	/**
+	 * Change the plugin locale
+	 *
+	 * This is used to temporarily change the plugin locale on a site,
+	 * mainly for debugging purpose.
+	 *
+	 * @since 3.2.2
+	 *
+	 * @param string $locale Current plugin locale
+	 * @param string $domain Current plugin domain
+	 *
+	 * @return string
+	 */
+	public function change_plugin_locale( $locale, $domain ) {
+
+		if ( 'wpas' !== $domain ) {
+			return $locale;
+		}
 
 		/**
 		 * Custom locale.
 		 *
 		 * The custom locale defined by the URL var $wpas_locale
 		 * is used for debugging purpose. It makes testing language
-		 * files easily without changing the site main language.
+		 * files easy without changing the site main language.
 		 * It can also be useful when doing support on a site that's
 		 * not in English.
 		 *
@@ -615,20 +659,10 @@ class Awesome_Support {
 		$wpas_locale = filter_input( INPUT_GET, 'wpas_locale', FILTER_SANITIZE_STRING );
 
 		if ( ! empty( $wpas_locale ) ) {
-			$backup = $locale;
 			$locale = $wpas_locale;
 		}
 
-		$language = load_plugin_textdomain( 'wpas', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
-
-		/**
-		 * Reset the $locale after loading our language file
-		 */
-		if ( ! empty( $wpas_locale ) ) {
-			$locale = $backup;
-		}
-
-		return $language;
+		return $locale;
 
 	}
 
@@ -742,8 +776,18 @@ class Awesome_Support {
 		wpas_email_notify( $reply_id, $case );
 	}
 
-	public function notify_close( $ticket_id ) {
-		wpas_email_notify( $ticket_id, 'ticket_closed' );
+	public function notify_close( $ticket_id, $update, $user_id ) {
+
+		if ( user_can( $user_id, 'edit_ticket' ) ) {
+			$case = 'ticket_closed_agent';
+		} elseif ( user_can( $user_id, 'create_ticket' ) ) {
+			$case = 'ticket_closed_client';
+		} else {
+			$case = 'ticket_closed';
+		}
+
+		wpas_email_notify( $ticket_id, $case );
+
 	}
 
 	/**
@@ -758,7 +802,7 @@ class Awesome_Support {
 	public function redirect_archive() {
 
 		if ( is_post_type_archive( 'ticket' ) ) {
-			wpas_redirect( 'archive_redirect', get_permalink( wpas_get_option( 'ticket_list' ) ) );
+			wpas_redirect( 'archive_redirect', wpas_get_tickets_list_page_url() );
 		}
 
 	}
@@ -960,6 +1004,36 @@ class Awesome_Support {
 		}
 
 		return $query;
+
+	}
+
+	/**
+	 * Make all tickets and replies URLs clickable
+	 *
+	 * @since 3.2.2
+	 *
+	 * @param string $content Post content
+	 *
+	 * @return string
+	 */
+	public function make_links_clickable( $content ) {
+
+		// We're not using $post_id here because we want to apply the filter to the entire "page", which includes ticket replies
+		if ( is_admin() && isset( $_GET['post'] ) && 'ticket' === get_post_type( filter_input( INPUT_GET, 'post', FILTER_SANITIZE_NUMBER_INT ) ) ) {
+			return make_clickable( $content );
+		}
+
+		global $post;
+
+		if ( ! isset( $post ) || empty( $post ) ) {
+			return $content;
+		}
+
+		if ( in_array( get_post_type( $post->ID ), array( 'ticket', 'ticket_reply' ) ) ) {
+			$content = make_clickable( $content );
+		}
+
+		return $content;
 
 	}
 

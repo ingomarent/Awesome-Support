@@ -38,7 +38,7 @@ class WPAS_File_Upload {
 		/**
 		 * Load the addon settings
 		 */
-		require_once( WPAS_PATH . 'includes/addons/file-uploader/settings-file-upload.php' );
+		require_once( WPAS_PATH . 'includes/file-uploader/settings-file-upload.php' );
 
 		if ( ! $this->can_attach_files() ) {
 			return;
@@ -603,8 +603,10 @@ class WPAS_File_Upload {
 
 		$url      = remove_query_arg( 'message', $location );
 		$error    = is_array( $this->error_message ) ? implode( ', ', $this->error_message ) : $this->error_message;
-		$message  = wpas_create_notification( sprintf( __( 'Your reply has been correctly submitted but the attachment was not uploaded. %s', 'wpas' ), $error ) );
-		$location = add_query_arg( array( 'message' => $message ), $url );
+
+		wpas_add_error( 'files_not_uploaded', sprintf( __( 'Your reply has been correctly submitted but the attachment was not uploaded. %s', 'wpas' ), $error ) );
+
+		$location = wp_sanitize_redirect( $url );
 
 		return $location;
 	}
@@ -704,7 +706,7 @@ class WPAS_File_Upload {
 
 		if ( ! empty( $filetypes ) ) {
 
-			require_once( WPAS_PATH . 'includes/addons/file-uploader/mime-types.php' );
+			require_once( WPAS_PATH . 'includes/file-uploader/mime-types.php' );
 
 			foreach ( $filetypes as $type ) {
 				$mimes[ $type ] = wpas_get_mime_type( $type );
