@@ -12,14 +12,8 @@ function wpas_register_account( $data = false ) {
 	global $post;
 
 	/* Make sure registrations are open */
-	$registration = boolval( wpas_get_option( 'allow_registrations', true ) );
 	$registration = wpas_get_option( 'allow_registrations', 'allow' );
 
-	if ( true !== $registration ) {
-		wp_redirect( add_query_arg( array(
-			'message' => wpas_create_notification( __( 'Registrations are currently not allowed.', 'wpas' ) ),
-			get_permalink( $post->ID )
-		) ) );
 	if ( 'allow' !== $registration ) {
 		wpas_add_error( 'registration_not_allowed', __( 'Registrations are currently not allowed.', 'wpas' ) );
 		wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
@@ -47,10 +41,6 @@ function wpas_register_account( $data = false ) {
 
 		$notice = implode( '\n\r', $errors->get_error_messages() );
 
-		wp_redirect( add_query_arg( array(
-			'message' => wpas_create_notification( $notice ),
-			get_permalink( $post->ID )
-		) ) );
 		wpas_add_error( 'registration_error', $notice );
 		wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 
@@ -69,10 +59,6 @@ function wpas_register_account( $data = false ) {
 	do_action( 'wpas_pre_register_account', $data );
 
 	if ( wpas_get_option( 'terms_conditions', false ) && ! isset( $data['terms'] ) ) {
-		wp_redirect( add_query_arg( array(
-			'message' => wpas_create_notification( __( 'You did not accept the terms and conditions.', 'wpas' ) ),
-			get_permalink( $post->ID )
-		) ) );
 		wpas_add_error( 'accept_terms_conditions', __( 'You did not accept the terms and conditions.', 'wpas' ) );
 		wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 		exit;
@@ -80,10 +66,6 @@ function wpas_register_account( $data = false ) {
 
 	/* Make sure we have all the necessary data. */
 	if ( false === ( $email || $first_name || $last_name || $pwd ) ) {
-		wp_redirect( add_query_arg( array(
-			'message' => wpas_create_notification( __( 'You didn\'t correctly fill all the fields.', 'wpas' ) ),
-			get_permalink( $post->ID )
-		) ) );
 		wpas_add_error( 'missing_fields', __( 'You didn\'t correctly fill all the fields.', 'wpas' ) );
 		wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 		exit;
@@ -140,10 +122,6 @@ function wpas_register_account( $data = false ) {
 		do_action( 'wpas_register_account_failed', $user_id, $args );
 
 		$error = $user_id->get_error_message();
-		wp_redirect( add_query_arg( array(
-			'message' => wpas_create_notification( $error ),
-			get_permalink( $post->ID )
-		) ) );
 
 		wpas_add_error( 'missing_fields', $error );
 		wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
@@ -165,15 +143,10 @@ function wpas_register_account( $data = false ) {
 		unset( $_SESSION['wpas_registration_form'] );
 
 		if ( true === apply_filters( 'wpas_new_user_notification', true ) ) {
-			wp_new_user_notification( $user_id, $pwd );
 			wp_new_user_notification( $user_id );
 		}
 
 		if ( headers_sent() ) {
-			wp_redirect( add_query_arg( array(
-				'message' => wpas_create_notification( __( 'Your account has been created. Please log-in.', 'wpas' ) ),
-				get_permalink( $post->ID )
-			) ) );
 			wpas_add_notification( 'account_created', __( 'Your account has been created. Please log-in.', 'wpas' ) );
 			wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 			exit;
@@ -228,7 +201,6 @@ function wpas_try_login() {
 
 		if ( is_wp_error( $login ) ) {
 			$error = $login->get_error_message();
-			wp_redirect( add_query_arg( array( 'message' => urlencode( base64_encode( json_encode( $error ) ) ) ), get_permalink( $post->ID ) ) );
 			wpas_add_error( 'login_failed', $error );
 			wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 			exit;
@@ -238,7 +210,6 @@ function wpas_try_login() {
 
 		if ( is_wp_error( $login ) ) {
 			$error = $login->get_error_message();
-			wp_redirect( add_query_arg( array( 'message' => urlencode( base64_encode( json_encode( $error ) ) ) ), get_permalink( $post->ID ) ) );
 			wpas_add_error( 'login_failed', $error );
 			wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 			exit;
@@ -246,7 +217,6 @@ function wpas_try_login() {
 			wp_redirect( get_permalink( $post->ID ) );
 			exit;
 		} else {
-			wp_redirect( add_query_arg( array( 'message' => urlencode( base64_encode( json_encode( __( 'We were unable to log you in for an unknown reason.', 'wpas' ) ) ) ) ), get_permalink( $post->ID ) ) );
 			wpas_add_error( 'login_failed', __( 'We were unable to log you in for an unknown reason.', 'wpas' ) );
 			wp_redirect( wp_sanitize_redirect( get_permalink( $post->ID ) ) );
 			exit;
@@ -361,7 +331,6 @@ function wpas_get_user_nice_role( $role ) {
 
 }
 
-function wpas_can_submit_ticket() {
 /**
  * Check if the current user has the permission to open a ticket
  *
@@ -374,12 +343,10 @@ function wpas_can_submit_ticket() {
  */
 function wpas_can_submit_ticket( $ticket_id = 0 ) {
 
-	$can = true;
 	if ( ! is_user_logged_in() ) {
 		return false;
 	}
 
-	return apply_filters( 'wpas_can_submit_ticket', $can );
 	if ( ! current_user_can( 'create_ticket' ) ) {
 		return false;
 	}
