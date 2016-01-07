@@ -1,0 +1,181 @@
+diff --git a/includes/addons/file-uploader/settings-file-upload.php b/includes/addons/file-uploader/settings-file-upload.php
+index 6ec5542..1afcf27 100644
+--- a/includes/addons/file-uploader/settings-file-upload.php
++++ b/includes/addons/file-uploader/settings-file-upload.php
+@@ -37,7 +37,7 @@ function wpas_addon_settings_file_upload( $def ) {
+ 					'name'    => __( 'Allowed Files Types', 'wpas' ),
+ 					'id'      => 'attachments_filetypes',
+ 					'type'    => 'textarea',
+-					'default' => 'jpg,jpeg,png,gif,pdf,doc,docx,ppt,pptx,pps,ppsx,odt,xls,xlsx,mp3,m4a,ogg,wav,mp4,m4v,mov,wmv,avi,mpg,ogv,3gp,3g2,zip',
++					//'default' => 'jpg,jpeg,png,gif,pdf,doc,docx,ppt,pptx,pps,ppsx,odt,xls,xlsx,mp3,m4a,ogg,wav,mp4,m4v,mov,wmv,avi,mpg,ogv,3gp,3g2,zip',
+ 					'desc'    => sprintf( __( 'Which file types do you allow your users to attach? Please separate each extension by a comma (%s)', 'wpas' ), '<code>,</code>' )
+ 				),
+ 			)
+diff --git a/includes/admin/metaboxes/replies.php b/includes/admin/metaboxes/replies.php
+index 16fcdee..8af2f46 100644
+--- a/includes/admin/metaboxes/replies.php
++++ b/includes/admin/metaboxes/replies.php
+@@ -247,7 +247,7 @@ if( 'open' == $status ):
+ 			 */
+ 			/* The edition textarea */
+ 			wp_editor( '', 'wpas_reply', array(
+-				'media_buttons' => false,
++				'media_buttons' => true,
+ 				'teeny' 		=> true,
+ 				'quicktags' 	=> true,
+ 				)
+diff --git a/includes/class-post-type.php b/includes/class-post-type.php
+index 62cbe22..e0f63d0 100644
+--- a/includes/class-post-type.php
++++ b/includes/class-post-type.php
+@@ -55,9 +55,9 @@ class WPAS_Ticket_Post_Type {
+ 		$supports = array( 'title' );
+ 
+ 		/* If the post is being created we add the editor */
+-		if( !isset( $_GET['post'] ) ) {
++		//if( !isset( $_GET['post'] ) ) {
+ 			array_push( $supports, 'editor' );
+-		}
++		//}
+ 
+ 		/* Post type menu icon */
+ 		$icon = version_compare( get_bloginfo( 'version' ), '3.8', '>=') ? 'dashicons-sos' : WPAS_ADMIN_ASSETS_URL . 'images/icon-tickets.png';
+@@ -111,7 +111,7 @@ class WPAS_Ticket_Post_Type {
+ 			'capability_type'     => 'view_ticket',
+ 			'capabilities'        => $cap,
+ 			'has_archive'         => true,
+-			'hierarchical'        => false,
++			'hierarchical'        => true,
+ 			'menu_position'       => null,
+ 			'menu_icon'           => $icon,
+ 			'supports'            => $supports
+@@ -231,6 +231,8 @@ class WPAS_Ticket_Post_Type {
+ 			'queued'     => _x( 'New', 'Ticket status', 'wpas' ),
+ 			'processing' => _x( 'In Progress', 'Ticket status', 'wpas' ),
+ 			'hold'       => _x( 'On Hold', 'Ticket status', 'wpas' ),
++			'wait_customer'       => _x( 'Waiting for customer reply', 'Ticket status', 'wpas' ),
++			'wait_support'       => _x( 'Waiting for support reply', 'Ticket status', 'wpas' ),
+ 		);
+ 
+ 		return apply_filters( 'wpas_ticket_statuses', $status );
+diff --git a/includes/functions-user.php b/includes/functions-user.php
+index c12a727..7850b3c 100644
+--- a/includes/functions-user.php
++++ b/includes/functions-user.php
+@@ -356,19 +356,19 @@ function wpas_get_users( $args = array() ) {
+ 	$args = wp_parse_args( $args, $defaults );
+ 
+ 	/* Get the hash of the arguments that's used for caching the result. */
+-	$hash = substr( md5( serialize( $args ) ), 0, 10 ); // Limit the length of the hash in order to avoid issues with option_name being too long in the database (https://core.trac.wordpress.org/ticket/15058)
++	//$hash = substr( md5( serialize( $args ) ), 0, 10 ); // Limit the length of the hash in order to avoid issues with option_name being too long in the database (https://core.trac.wordpress.org/ticket/15058)
+ 
+ 	/* Check if we have a result already cached. */
+-	$result = get_transient( "wpas_list_users_$hash" );
++	//$result = false;//get_transient( "wpas_list_users_$hash" );
+ 
+ 	/* If there is a cached result we return it and don't run the expensive query. */
+-	if ( false !== $result ) {
++	/*if ( false !== $result ) {
+ 		if ( is_array( $result ) && isset( $result[0] ) && is_object( $result[0] ) && is_a( $result[0], 'WP_User' ) ) {
+ 			delete_transient( "wpas_list_users_$hash" ); // Invalidate the previous cache
+ 		} else {
+ 			return apply_filters( 'wpas_get_users', get_users( array( 'include' => (array) $result ) ) );
+ 		}
+-	}
++	}*/
+ 
+ 	/* Get all WordPress users */
+ 	$all_users = get_users();
+@@ -414,7 +414,7 @@ function wpas_get_users( $args = array() ) {
+ 	}
+ 
+ 	/* Let's cache the result so that we can avoid running this query too many times. */
+-	set_transient( "wpas_list_users_$hash", $users_ids, apply_filters( 'wpas_list_users_cache_expiration', 60 * 60 * 24 ) );
++	//set_transient( "wpas_list_users_$hash", $users_ids, apply_filters( 'wpas_list_users_cache_expiration', 60 * 60 * 24 ) );
+ 
+ 	return apply_filters( 'wpas_get_users', $list );
+ 
+diff --git a/includes/shortcodes/shortcode-tickets.php b/includes/shortcodes/shortcode-tickets.php
+index a8c6ec8..87aa6b9 100644
+--- a/includes/shortcodes/shortcode-tickets.php
++++ b/includes/shortcodes/shortcode-tickets.php
+@@ -3,7 +3,7 @@ add_shortcode( 'tickets', 'wpas_sc_client_account' );
+ /**
+  * Registration page shortcode.
+  */
+-function wpas_sc_client_account() {
++function wpas_sc_client_account($atts) {
+ 
+ 	global $wpas_tickets, $current_user, $post;
+ 
+@@ -17,10 +17,10 @@ function wpas_sc_client_account() {
+ 	 */
+ 	$author = ( 0 !== $current_user->ID ) ? $current_user->ID : -1;
+ 
+-	$args = array(
++	$args =shortcode_atts( array(
+ 		'author'                 => $author,
+ 		'post_type'              => 'ticket',
+-		'post_status'            => 'any',
++		'post_status'            => 'all',
+ 		'order'                  => 'DESC',
+ 		'orderby'                => 'date',
+ 		'posts_per_page'         => -1,
+@@ -28,8 +28,24 @@ function wpas_sc_client_account() {
+ 		'cache_results'          => false,
+ 		'update_post_term_cache' => false,
+ 		'update_post_meta_cache' => false,
++		'ticketstatus' => false,
++		'registrationform' => false,
++
++),$atts );
++
++if($args['ticketstatus']){
++	$args['meta_query']=array(
++			array(
++				'key' => '_wpas_status',
++				'value' => $args['ticketstatus'],
++				)
+ 		
+ 	);
++	unset($args['ticketstatus']);
++
++}
++
++
+ 
+ 	$wpas_tickets = new WP_Query( $args );		
+ 
+@@ -48,7 +64,7 @@ function wpas_sc_client_account() {
+ 	do_action( 'wpas_before_tickets_list' );
+ 
+ 	/* If user is not logged in we display the register form */
+-	if ( !is_user_logged_in() ):
++	if ( !is_user_logged_in() ){
+ 
+ 		$registration = wpas_get_option( 'login_page', false );
+ 
+@@ -58,17 +74,18 @@ function wpas_sc_client_account() {
+ 			wpas_notification( false, __( 'You are being redirected...', 'wpas' ) );
+ 			exit;
+ 		}
+-
+-		wpas_get_template( 'registration' );
+-
+-	else:
++		if($args['registrationform']){
++			wpas_get_template( 'registration' );
++		}
++}
++	else{
+ 
+ 		/**
+ 		 * Get the custom template.
+ 		 */
+ 		wpas_get_template( 'list' );
+ 
+-	endif;
++	}
+ 
+ 	/**
+ 	 * wpas_after_tickets_list hook
