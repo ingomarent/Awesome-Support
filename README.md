@@ -1,13 +1,13 @@
 Awesome Support
 ==================
 
-[![Build Status](https://travis-ci.org/ThemeAvenue/Awesome-Support.svg?branch=master)](https://travis-ci.org/ThemeAvenue/Awesome-Support) [![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/ThemeAvenue/Awesome-Support/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/ThemeAvenue/Awesome-Support/?branch=master) [![Code Coverage](https://scrutinizer-ci.com/g/ThemeAvenue/Awesome-Support/badges/coverage.png?b=master)](https://scrutinizer-ci.com/g/ThemeAvenue/Awesome-Support/?branch=master)
+[![Build Status](https://travis-ci.org/Awesome-Support/Awesome-Support.svg?branch=master)](https://travis-ci.org/Awesome-Support/Awesome-Support) [![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/Awesome-Support/Awesome-Support/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/Awesome-Support/Awesome-Support/?branch=master) [![Code Coverage](https://scrutinizer-ci.com/g/Awesome-Support/Awesome-Support/badges/coverage.png?b=master)](https://scrutinizer-ci.com/g/Awesome-Support/Awesome-Support/?branch=master)
 
 Awesome Support is the most advanced ticketing system for WordPress. It is the result of two years of work, research and improvement. Most of its features are an answer to users requests and that's what makes it the best support plugin for WordPress.
 
 ## Requirements
 
-- WordPress 3.5.1+
+- WordPress 3.8+
 - PHP 5.2+
 
 Below are some info from the plugin's repository on [WordPress.org](https://wordpress.org/plugins/awesome-support/).
@@ -15,6 +15,11 @@ Below are some info from the plugin's repository on [WordPress.org](https://word
 ![Wordpress plugin](https://img.shields.io/wordpress/plugin/v/Awesome-Support.svg?style=flat) ![Tested WordPress version](https://img.shields.io/wordpress/v/Awesome-Support.svg?style=flat) ![WordPress.org rating](https://img.shields.io/wordpress/plugin/r/Awesome-Support.svg?style=flat) [![Wordpress](https://img.shields.io/wordpress/plugin/dt/Awesome-Support.svg?style=flat)]()
 
 ## Installation
+
+To get started right away:
+```
+git init && git remote add origin git@github.com:Awesome-Support/Awesome-Support.git && git pull origin master && composer install && npm install
+```
 
 ### Not a developer?
 

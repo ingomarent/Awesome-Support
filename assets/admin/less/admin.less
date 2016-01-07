@@ -271,7 +271,7 @@ Ticket Replies
 #wpas_files_wrapper {
 	background-color: #FFFFED;
 	padding: 1.5em;
-	margin: 1.5em 0;
+	margin-bottom: 15px;
 	border: 1px solid #ddd;
 
 	label {
@@ -285,6 +285,25 @@ Ticket Replies
 .wpas-ticket-content,
 .wpas-reply-content {
 	.force-wrap();
+}
+.wpas-table-replies td {
+	/* Restore default paragraph style */
+	p + p {
+		line-height: 1.5;
+		margin-top: 1.5em;
+	}
+}
+#wp-wpas_reply-wrap {
+	margin-bottom: 15px;
+}
+.wp-core-ui {
+	.wpas-reply-actions {
+		.button,
+		.button-primary,
+		.button-secondary {
+			margin-right: 5px;
+		}
+	}
 }
 
 @media screen and (max-width: 782px) {

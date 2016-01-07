@@ -75,7 +75,28 @@ class WPAS_File_Upload {
 			add_action( 'before_delete_post',                array( $this, 'delete_attachments' ), 10, 1 );
 			add_action( 'wpas_backend_ticket_content_after', array( $this, 'show_attachments' ), 10, 1 );
 			add_action( 'wpas_backend_reply_content_after',  array( $this, 'show_attachments' ), 10, 1 );
+			add_filter( 'wpas_cf_wrapper_class',             array( $this, 'add_wrapper_class_admin' ), 10, 2 );
 		}
+	}
+
+	/**
+	 * Add a custom class to the upload field wrapper in the admin
+	 *
+	 * @since 3.2.10
+	 *
+	 * @param array $classes Field wrapper classes
+	 * @param array $field   Field parameters
+	 *
+	 * @return array
+	 */
+	public function add_wrapper_class_admin( $classes, $field ) {
+
+		if ( 'upload' === $field['args']['field_type'] ) {
+			array_push( $classes, 'wpas-under-reply-box' );
+		}
+
+		return $classes;
+
 	}
 
 	/**
@@ -159,18 +180,18 @@ class WPAS_File_Upload {
 			}
 
 			if ( 'attachment' !== $attachment->post_type ) {
-				wp_die( __( 'The file you requested is not a valid attachment', 'wpas' ) );
+				wp_die( __( 'The file you requested is not a valid attachment', 'awesome-support' ) );
 			}
 
 			if ( empty( $attachment->post_parent ) ) {
-				wp_die( __( 'The attachment you requested is not attached to any ticket', 'wpas' ) );
+				wp_die( __( 'The attachment you requested is not attached to any ticket', 'awesome-support' ) );
 			}
 
 			$parent    = get_post( $attachment->post_parent ); // Get the parent. It can be a ticket or a ticket reply
 			$parent_id = empty( $parent->post_parent ) ? $parent->ID : $parent->post_parent;
 
 			if ( true !== wpas_can_view_ticket( $parent_id ) ) {
-				wp_die( __( 'You are not allowed to view this attachment', 'wpas' ) );
+				wp_die( __( 'You are not allowed to view this attachment', 'awesome-support' ) );
 			}
 
 			header( "Content-Type: $attachment->post_mime_type" );
@@ -338,22 +359,15 @@ class WPAS_File_Upload {
 				'capability' => 'edit_ticket',
 				'field_type' => 'upload',
 				'multiple'   => true,
-				'label'      => __( 'Attachments', 'wpas' ),
-				'desc'       => sprintf( __( ' You can upload up to %d files (maximum %d MB each) of the following types: %s', 'wpas' ), (int) wpas_get_option( 'attachments_max' ), (int) wpas_get_option( 'filesize_max' ), apply_filters( 'wpas_attachments_filetypes_display', $filetypes ) )
+				'label'      => __( 'Attachments', 'awesome-support' ),
+				'desc'       => sprintf( __( ' You can upload up to %d files (maximum %d MB each) of the following types: %s', 'awesome-support' ), (int) wpas_get_option( 'attachments_max' ), (int) wpas_get_option( 'filesize_max' ), apply_filters( 'wpas_attachments_filetypes_display', $filetypes ) )
 			)
 		) );
 
 		$attachments = new WPAS_Custom_Field( $this->index, $attachments_args );
 		echo $attachments->get_output();
-		?>
 
-<!--		<div class="wpas-form-group wpas-attachment-container">-->
-<!--			<label for="wpas-file-upload">--><?php //_e( 'Attachments', 'wpas' ); ?><!--</label>-->
-<!--			<input type="file" name="--><?php //echo $this->index; ?><!--[]" id="wpas-file-upload" class="wpas-form-control" accept="--><?php //echo $accept; ?><!--" multiple>-->
-<!--			<p class="wpas-help-block">--><?php //printf( __( ' You can upload up to %d files (maximum %d MB each) of the following types: %s', 'wpas' ), (int) wpas_get_option( 'attachments_max' ), (int) wpas_get_option( 'filesize_max' ), apply_filters('wpas_attachments_filetypes_display', $filetypes ) ); ?><!--</p>-->
-<!--		</div>-->
-
-	<?php }
+	}
 
 	/**
 	 * Get post attachments.
@@ -438,7 +452,7 @@ class WPAS_File_Upload {
 		if ( ! empty( $attachments ) ): ?>
 
 			<div class="wpas-reply-attachements">
-				<strong><?php _e( 'Attachments:', 'wpas' ); ?></strong>
+				<strong><?php _e( 'Attachments:', 'awesome-support' ); ?></strong>
 				<ul>
 					<?php
 					foreach ( $attachments as $attachment_id => $attachment ):
@@ -604,7 +618,7 @@ class WPAS_File_Upload {
 		$url      = remove_query_arg( 'message', $location );
 		$error    = is_array( $this->error_message ) ? implode( ', ', $this->error_message ) : $this->error_message;
 
-		wpas_add_error( 'files_not_uploaded', sprintf( __( 'Your reply has been correctly submitted but the attachment was not uploaded. %s', 'wpas' ), $error ) );
+		wpas_add_error( 'files_not_uploaded', sprintf( __( 'Your reply has been correctly submitted but the attachment was not uploaded. %s', 'awesome-support' ), $error ) );
 
 		$location = wp_sanitize_redirect( $url );
 
@@ -671,15 +685,15 @@ class WPAS_File_Upload {
 		$max_size_bytes = $max_size * 1024 * 1024;
 
 		if ( !in_array( $ext, $filetypes ) ) {
-			$file['error'] = sprintf( __( 'You are not allowed to upload files of this type (%s)', 'wpas' ), $ext );
+			$file['error'] = sprintf( __( 'You are not allowed to upload files of this type (%s)', 'awesome-support' ), $ext );
 		}
 
 		if ( $file['size'] <= 0 ) {
-			$file['error'] = __( 'You cannot upload empty attachments. You attachments weights 0 bytes', 'wpas' );
+			$file['error'] = __( 'You cannot upload empty attachments. You attachments weights 0 bytes', 'awesome-support' );
 		}
 
 		if ( $file['size'] > $max_size_bytes ) {
-			$file['error'] = sprintf( __( 'Your attachment is too big. You are allowed to attach files up to %s', 'wpas' ), "$max_size Mo" );
+			$file['error'] = sprintf( __( 'Your attachment is too big. You are allowed to attach files up to %s', 'awesome-support' ), "$max_size Mo" );
 		}
 		
 		return $file;

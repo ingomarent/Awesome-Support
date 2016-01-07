@@ -103,6 +103,7 @@ class Awesome_Support_Admin {
 			/* Do Actions. */
 			add_action( 'pre_get_posts',             array( $this, 'hide_others_tickets' ), 10, 1 );
 			add_action( 'pre_get_posts',             array( $this, 'limit_open' ), 10, 1 );
+			add_action( 'pre_get_posts',             array( $this, 'maybe_remove_author' ), 10, 1 );
 			add_action( 'admin_init',                array( $this, 'system_tools' ), 10, 0 );
 			add_action( 'plugins_loaded',            array( $this, 'remote_notifications' ), 15, 0 );
 			add_action( 'admin_enqueue_scripts',     array( $this, 'enqueue_admin_styles' ) );              // Load plugin styles
@@ -196,7 +197,7 @@ class Awesome_Support_Admin {
 	public static function settings_page_link( $links ) {
 
 		$link    = add_query_arg( array( 'post_type' => 'ticket', 'page' => 'settings' ), admin_url( 'edit.php' ) );
-		$links[] = "<a href='$link'>" . __( 'Settings', 'wpas' ) . "</a>";
+		$links[] = "<a href='$link'>" . __( 'Settings', 'awesome-support' ) . "</a>";
 
 		return $links;
 
@@ -242,8 +243,21 @@ class Awesome_Support_Admin {
 
 		global $current_user;
 
-		$query->set( 'meta_key', '_wpas_assignee' );
-		$query->set( 'meta_value', (int) $current_user->ID );
+		// We need to update the original meta_query and not replace it to avoid filtering issues
+		$meta_query = $query->get( 'meta_query' );
+
+		if ( ! is_array( $meta_query ) ) {
+			$meta_query = array_filter( (array) $meta_query );
+		}
+
+		$meta_query[] = array(
+				'key'     => '_wpas_assignee',
+				'value'   => (int) $current_user->ID,
+				'compare' => '=',
+				'type'    => 'NUMERIC',
+		);
+
+		$query->set( 'meta_query', $meta_query );
 
 		return true;
 
@@ -281,20 +295,72 @@ class Awesome_Support_Admin {
 
 		if ( isset( $_GET['post_status'] ) && array_key_exists( $_GET['post_status'], wpas_get_post_status() ) || ! isset( $_GET['post_status'] ) && true === (bool) wpas_get_option( 'hide_closed', false ) ) {
 
-			$query->set( 'meta_query', array(
-					array(
-						'key'     => '_wpas_status',
-						'value'   => 'open',
-						'compare' => '=',
-					)
-				)
+			// We need to update the original meta_query and not replace it to avoid filtering issues
+			$meta_query = $query->get( 'meta_query' );
+
+			if ( ! is_array( $meta_query ) ) {
+				$meta_query = array_filter( (array) $meta_query );
+			}
+
+			$meta_query[] = array(
+					'key'     => '_wpas_status',
+					'value'   => 'open',
+					'compare' => '=',
+					'type'    => 'CHAR',
 			);
+
+			$query->set( 'meta_query', $meta_query );
 
 			return true;
 
 		} else {
 			return false;
 		}
+
+	}
+
+	/**
+	 * Maybe remove the author query var from the main query
+	 *
+	 * The ticket author is always the client, so if the author query var is set
+	 * agents will not be able to see tickets, even though they are assigned to them.
+	 *
+	 * @since 3.2.4
+	 *
+	 * @param WP_Query $query WordPress query
+	 *
+	 * @return bool
+	 */
+	public function maybe_remove_author( $query ) {
+
+		// We only want to alter the admin side of things
+		if ( ! is_admin() ) {
+			return false;
+		}
+
+		// If our custom query parameter is set we remove the author straight away
+		if ( isset( $query->query_vars['wpas_query'] ) ) {
+			$query->query_vars['author'] = '';
+		}
+
+		$post_type = $query->get( 'post_type' );
+
+		if ( ! is_array( $post_type ) ) {
+			$post_type = (array) $post_type;
+		}
+
+		foreach ( $post_type as $pt ) {
+
+			if ( in_array( $pt, array( 'ticket', 'ticket_reply', 'ticket_history', 'ticket_log' ) ) ) {
+
+				$query->query_vars['author'] = '';
+				break;
+
+			}
+
+		}
+
+		return $query;
 
 	}
 
@@ -342,13 +408,14 @@ class Awesome_Support_Admin {
 			wp_enqueue_script( 'wpas-admin-about-script', WPAS_URL . 'assets/admin/js/admin-about.js', array( 'jquery' ), WPAS_VERSION );
 		}
 
-		wp_enqueue_script( 'wpas-select2', WPAS_URL . 'assets/admin/js/vendor/select2.min.js', array( 'jquery' ), '3.5.2', true );
+		wp_enqueue_script( 'wpas-select2', WPAS_URL . 'assets/admin/js/vendor/select2.min.js', array( 'jquery' ), '4.0.0', true );
 		wp_enqueue_script( 'wpas-admin-script', WPAS_URL . 'assets/admin/js/admin.js', array( 'jquery', 'wpas-select2' ), WPAS_VERSION );
 		wp_enqueue_script( 'wpas-admin-tabletojson', WPAS_URL . 'assets/admin/js/vendor/jquery.tabletojson.min.js', array( 'jquery' ), WPAS_VERSION );
 
 		if ( 'edit' === $action && 'ticket' == get_post_type() ) {
 			wp_enqueue_script( 'wpas-admin-reply', WPAS_URL . 'assets/admin/js/admin-reply.js', array( 'jquery' ), WPAS_VERSION );
-			wp_localize_script( 'wpas-admin-reply', 'wpasL10n', array( 'alertDelete' => __( 'Are you sure you want to delete this reply?', 'wpas' ), 'alertNoTinyMCE' => __( 'No instance of TinyMCE found. Please use wp_editor on this page at least once: http://codex.wordpress.org/Function_Reference/wp_editor', 'wpas' ) ) );
+			wp_enqueue_script( 'wpas-autolinker', WPAS_URL . 'assets/public/vendor/Autolinker/Autolinker.min.js', null, '0.19.0', true );
+			wp_localize_script( 'wpas-admin-reply', 'wpasL10n', array( 'alertDelete' => __( 'Are you sure you want to delete this reply?', 'awesome-support' ), 'alertNoTinyMCE' => __( 'No instance of TinyMCE found. Please use wp_editor on this page at least once: http://codex.wordpress.org/Function_Reference/wp_editor', 'awesome-support' ), 'alertNoContent' => __( "You can't submit an empty reply", 'awesome-support' ) ) );
 		}
 
 	}
@@ -371,8 +438,8 @@ class Awesome_Support_Admin {
 
 			$list_args = array(
 				'post_content'   => '[tickets]',
-				'post_title'     => wp_strip_all_tags( __( 'My Tickets', 'wpas' ) ),
-				'post_name'      => sanitize_title( __( 'My Tickets', 'wpas' ) ),
+				'post_title'     => wp_strip_all_tags( __( 'My Tickets', 'awesome-support' ) ),
+				'post_name'      => sanitize_title( __( 'My Tickets', 'awesome-support' ) ),
 				'post_type'      => 'page',
 				'post_status'    => 'publish',
 				'ping_status'    => 'closed',
@@ -391,8 +458,8 @@ class Awesome_Support_Admin {
 
 			$submit_args = array(
 				'post_content'   => '[ticket-submit]',
-				'post_title'     => wp_strip_all_tags( __( 'Submit Ticket', 'wpas' ) ),
-				'post_name'      => sanitize_title( __( 'Submit Ticket', 'wpas' ) ),
+				'post_title'     => wp_strip_all_tags( __( 'Submit Ticket', 'awesome-support' ) ),
+				'post_name'      => sanitize_title( __( 'Submit Ticket', 'awesome-support' ) ),
 				'post_type'      => 'page',
 				'post_status'    => 'publish',
 				'ping_status'    => 'closed',
@@ -456,7 +523,7 @@ class Awesome_Support_Admin {
 
 		return array_merge(
 			array(
-				'settings' => '<a href="' . add_query_arg( array( 'post_type' => 'ticket', 'page' => 'edit.php?post_type=ticket-settings' ), admin_url( 'edit.php' ) ) . '">' . __( 'Settings', 'wpas' ) . '</a>'
+				'settings' => '<a href="' . add_query_arg( array( 'post_type' => 'ticket', 'page' => 'edit.php?post_type=ticket-settings' ), admin_url( 'edit.php' ) ) . '">' . __( 'Settings', 'awesome-support' ) . '</a>'
 			),
 			$links
 		);
@@ -481,9 +548,9 @@ class Awesome_Support_Admin {
 			$status = wpas_get_ticket_status( $post->ID );
 
 			if ( 'open' === $status ) {
-				$actions['close'] = '<a href="' . wpas_get_close_ticket_url( $post->ID ) . '">' . __( 'Close', 'wpas' ) . '</a>';
+				$actions['close'] = '<a href="' . wpas_get_close_ticket_url( $post->ID ) . '">' . __( 'Close', 'awesome-support' ) . '</a>';
 			} elseif( 'closed' === $status ) {
-				$actions['open'] = '<a href="' . wpas_get_open_ticket_url( $post->ID ) . '">' . __( 'Open', 'wpas' ) . '</a>';
+				$actions['open'] = '<a href="' . wpas_get_open_ticket_url( $post->ID ) . '">' . __( 'Open', 'awesome-support' ) . '</a>';
 			}
 			
 		}
@@ -508,7 +575,7 @@ class Awesome_Support_Admin {
 				case 'opened':
 					?>
 					<div class="updated">
-						<p><?php printf( __( 'The ticket #%s has been (re)opened.', 'wpas' ), intval( $_GET['post'] ) ); ?></p>
+						<p><?php printf( __( 'The ticket #%s has been (re)opened.', 'awesome-support' ), intval( $_GET['post'] ) ); ?></p>
 					</div>
 					<?php
 				break;
@@ -516,7 +583,7 @@ class Awesome_Support_Admin {
 				case 'closed':
 					?>
 					<div class="updated">
-						<p><?php printf( __( 'The ticket #%s has been closed.', 'wpas' ), intval( $_GET['post'] ) ); ?></p>
+						<p><?php printf( __( 'The ticket #%s has been closed.', 'awesome-support' ), intval( $_GET['post'] ) ); ?></p>
 					</div>
 					<?php
 				break;
@@ -554,10 +621,10 @@ class Awesome_Support_Admin {
 		$multiple_url = add_query_arg( $get_multiple, admin_url( $pagenow ) );
 		?>
 		<div class="updated">
-			<p><?php _e( 'Will you be supporting multiple products on this support site? You can activate multi-products support now. <small>(This setting can be modified later)</small>', 'wpas' ); ?></p>
+			<p><?php _e( 'Will you be supporting multiple products on this support site? You can activate multi-products support now. <small>(This setting can be modified later)</small>', 'awesome-support' ); ?></p>
 			<p>
-				<a href="<?php echo wp_sanitize_redirect( $single_url ); ?>" class="button-secondary"><?php _e( 'Single Product', 'wpas' ); ?></a> 
-				<a href="<?php echo wp_sanitize_redirect( $multiple_url ); ?>" class="button-secondary"><?php _e( 'Multiple Products', 'wpas' ); ?></a>
+				<a href="<?php echo wp_sanitize_redirect( $single_url ); ?>" class="button-secondary"><?php _e( 'Single Product', 'awesome-support' ); ?></a>
+				<a href="<?php echo wp_sanitize_redirect( $multiple_url ); ?>" class="button-secondary"><?php _e( 'Multiple Products', 'awesome-support' ); ?></a>
 			</p>
 		</div>
 	<?php }
@@ -617,7 +684,7 @@ class Awesome_Support_Admin {
 				$data['post_status'] = $_POST['post_status_override'];
 
 				if ( $postarr['original_post_status'] !== $_POST['post_status_override'] && isset( $_POST['wpas_post_parent'] ) ) {
-					wpas_log( intval( $_POST['wpas_post_parent'] ), sprintf( __( 'Ticket state changed to %s', 'wpas' ), '&laquo;' . $status[$_POST['post_status_override']] . '&raquo;' ) );
+					wpas_log( intval( $_POST['wpas_post_parent'] ), sprintf( __( 'Ticket state changed to %s', 'awesome-support' ), '&laquo;' . $status[$_POST['post_status_override']] . '&raquo;' ) );
 				}
 			}
 
@@ -633,9 +700,9 @@ class Awesome_Support_Admin {
 	 * @return void
 	 */
 	public function register_submenu_items() {
-		add_submenu_page( 'edit.php?post_type=ticket', __( 'Debugging Tools', 'wpas' ), __( 'Tools', 'wpas' ), 'administrator', 'wpas-status', array( $this, 'display_status_page' ) );
-		add_submenu_page( 'edit.php?post_type=ticket', __( 'Awesome Support Addons', 'wpas' ), '<span style="color:#f39c12;">' . __( 'Addons', 'wpas' ) . '</span>', 'edit_posts', 'wpas-addons', array( $this, 'display_addons_page' ) );
-		add_submenu_page( 'edit.php?post_type=ticket', __( 'About Awesome Support', 'wpas' ), __( 'About', 'wpas' ), 'edit_posts', 'wpas-about', array( $this, 'display_about_page' ) );
+		add_submenu_page( 'edit.php?post_type=ticket', __( 'Debugging Tools', 'awesome-support' ), __( 'Tools', 'awesome-support' ), 'administrator', 'wpas-status', array( $this, 'display_status_page' ) );
+		add_submenu_page( 'edit.php?post_type=ticket', __( 'Awesome Support Addons', 'awesome-support' ), '<span style="color:#f39c12;">' . __( 'Addons', 'awesome-support' ) . '</span>', 'edit_posts', 'wpas-addons', array( $this, 'display_addons_page' ) );
+		add_submenu_page( 'edit.php?post_type=ticket', __( 'About Awesome Support', 'awesome-support' ), __( 'About', 'awesome-support' ), 'edit_posts', 'wpas-about', array( $this, 'display_about_page' ) );
 		remove_submenu_page( 'edit.php?post_type=ticket', 'wpas-about' );
 	}
 
@@ -653,21 +720,19 @@ class Awesome_Support_Admin {
 
 		global $menu, $current_user;
 
-		$args = array();
-
 		if ( current_user_can( 'administrator' )
-			&& false === boolval( wpas_get_option( 'admin_see_all' ) )
-			|| !current_user_can( 'administrator' )
-			&& current_user_can( 'edit_ticket' )
-			&& false === boolval( wpas_get_option( 'agent_see_all' ) ) ) {
-			$args['meta_query'][] = array(
-				'key'     => '_wpas_assignee',
-				'value'   => $current_user->ID,
-				'compare' => '=',
-			);
-		}
+		     && false === boolval( wpas_get_option( 'admin_see_all' ) )
+		     || ! current_user_can( 'administrator' )
+		        && current_user_can( 'edit_ticket' )
+		        && false === boolval( wpas_get_option( 'agent_see_all' ) )
+		) {
 
-		$count = count( wpas_get_tickets( 'open', $args ) );
+			$agent = new WPAS_Agent( $current_user->ID );
+			$count = $agent->open_tickets();
+
+		} else {
+			$count = count( wpas_get_tickets( 'open' ) );
+		}
 
 		if ( 0 === $count ) {
 			return false;
@@ -845,26 +910,26 @@ class Awesome_Support_Admin {
 		 */
 		/* Issue details, only available for existing tickets */
 		if( isset( $_GET['post'] ) ) {
-			add_meta_box( 'wpas-mb-message', __( 'Ticket', 'wpas' ), array( $this, 'metabox_callback' ), 'ticket', 'normal', 'high', array( 'template' => 'message' ) );
+			add_meta_box( 'wpas-mb-message', __( 'Ticket', 'awesome-support' ), array( $this, 'metabox_callback' ), 'ticket', 'normal', 'high', array( 'template' => 'message' ) );
 
 			$status = get_post_meta( intval( $_GET['post'] ), '_wpas_status', true );
 
 			if ( '' !== $status ) {
-				add_meta_box( 'wpas-mb-replies', __( 'Ticket Replies', 'wpas' ), array( $this, 'metabox_callback' ), 'ticket', 'normal', 'high', array( 'template' => 'replies' ) );
+				add_meta_box( 'wpas-mb-replies', __( 'Ticket Replies', 'awesome-support' ), array( $this, 'metabox_callback' ), 'ticket', 'normal', 'high', array( 'template' => 'replies' ) );
 			}
 		}
 
 		/* Ticket details */
-		add_meta_box( 'wpas-mb-details', __( 'Details', 'wpas' ), array( $this, 'metabox_callback' ), 'ticket', 'side', 'high', array( 'template' => 'details' ) );
+		add_meta_box( 'wpas-mb-details', __( 'Details', 'awesome-support' ), array( $this, 'metabox_callback' ), 'ticket', 'side', 'high', array( 'template' => 'details' ) );
 
 		/* Contacts involved in the ticket */
-		add_meta_box( 'wpas-mb-contacts', __( 'Stakeholders', 'wpas' ), array( $this, 'metabox_callback' ), 'ticket', 'side', 'high', array( 'template' => 'stakeholders' ) );
+		add_meta_box( 'wpas-mb-contacts', __( 'Stakeholders', 'awesome-support' ), array( $this, 'metabox_callback' ), 'ticket', 'side', 'high', array( 'template' => 'stakeholders' ) );
 
 		/* Custom fields */
 		global $wpas_cf;
 
 		if ( $wpas_cf->have_custom_fields() ) {	
-			add_meta_box( 'wpas-mb-cf', __( 'Custom Fields', 'wpas' ), array( $this, 'metabox_callback' ), 'ticket', 'side', 'default', array( 'template' => 'custom-fields' ) );
+			add_meta_box( 'wpas-mb-cf', __( 'Custom Fields', 'awesome-support' ), array( $this, 'metabox_callback' ), 'ticket', 'side', 'default', array( 'template' => 'custom-fields' ) );
 		}
 
 	}
@@ -897,13 +962,13 @@ class Awesome_Support_Admin {
 	public function metabox_callback( $post, $args ) {
 
 		if ( ! is_array( $args ) || ! isset( $args['args']['template'] ) ) {
-			_e( 'An error occurred while registering this metabox. Please contact the support.', 'wpas' );
+			_e( 'An error occurred while registering this metabox. Please contact the support.', 'awesome-support' );
 		}
 
 		$template = $args['args']['template'];
 
 		if ( ! file_exists( WPAS_PATH . "includes/admin/metaboxes/$template.php" ) ) {
-			_e( 'An error occured while loading this metabox. Please contact the support.', 'wpas' );
+			_e( 'An error occured while loading this metabox. Please contact the support.', 'awesome-support' );
 		}
 
 		/* Include the metabox content */
@@ -979,7 +1044,7 @@ class Awesome_Support_Admin {
 				$user_id = $current_user->ID;
 				$content = wp_kses_post( $_POST['wpas_reply'] );
 
-				$data = array(
+				$data = apply_filters( 'wpas_post_reply_admin_args', array(
 					'post_content'   => $content,
 					'post_status'    => 'read',
 					'post_type'      => 'ticket_reply',
@@ -987,7 +1052,7 @@ class Awesome_Support_Admin {
 					'post_parent'    => $post_id,
 					'ping_status'    => 'closed',
 					'comment_status' => 'closed',
-				);
+				) );
 
 				/**
 				 * Remove the save_post hook now as we're going to trigger
@@ -995,8 +1060,29 @@ class Awesome_Support_Admin {
 				 */
 				remove_action( 'save_post_ticket', array( $this, 'save_ticket' ) );
 
+				/**
+				 * Fires right before a ticket reply is submitted
+				 *
+				 * @since 3.2.6
+				 *
+				 * @param int   $post_id Ticket ID
+				 * @param array $data    Data to be inserted as the reply
+				 */
+				do_action( 'wpas_post_reply_admin_before', $post_id, $data );
+
 				/* Insert the reply in DB */
 				$reply = wpas_add_reply( $data, $post_id );
+
+				/**
+				 * Fires right after a ticket reply is submitted
+				 *
+				 * @since 3.2.6
+				 *
+				 * @param int      $post_id Ticket ID
+				 * @param array    $data    Data to be inserted as the reply
+				 * @param bool|int Reply    ID on success, false on failure
+				 */
+				do_action( 'wpas_post_reply_admin_after', $post_id, $data, $reply );
 
 				/* In case the insertion failed... */
 				if ( is_wp_error( $reply ) ) {
@@ -1005,11 +1091,6 @@ class Awesome_Support_Admin {
 					$_SESSION['wpas_redirect'] = add_query_arg( array( 'wpas-message' => 'wpas_reply_error' ), get_permalink( $post_id ) );
 
 				} else {
-
-					/**
-					 * Delete the activity transient.
-					 */
-					delete_transient( "wpas_activity_meta_post_$post_id" );
 
 					/* E-Mail the client */
 					$new_reply = new WPAS_Email_Notification( $post_id, array( 'reply_id' => $reply, 'action' => 'reply_agent' ) );

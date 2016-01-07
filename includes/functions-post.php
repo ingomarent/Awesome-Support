@@ -30,7 +30,7 @@ function wpas_open_ticket( $data ) {
 		wpas_save_values();
 
 		// Redirect to submit page
-		wpas_add_error( 'cannot_open_ticket', __( 'You do not have the capacity to open a new ticket.', 'wpas' ) );
+		wpas_add_error( 'cannot_open_ticket', __( 'You do not have the capacity to open a new ticket.', 'awesome-support' ) );
 		wp_redirect( $submit );
 
 		// Break
@@ -44,7 +44,7 @@ function wpas_open_ticket( $data ) {
 		wpas_save_values();
 
 		// Redirect to submit page
-		wpas_add_error( 'missing_title', __( 'It is mandatory to provide a title for your issue.', 'wpas' ) );
+		wpas_add_error( 'missing_title', __( 'It is mandatory to provide a title for your issue.', 'awesome-support' ) );
 		wp_redirect( $submit );
 
 		// Break
@@ -57,7 +57,7 @@ function wpas_open_ticket( $data ) {
 		wpas_save_values();
 
 		// Redirect to submit page
-		wpas_add_error( 'missing_description', __( 'It is mandatory to provide a description for your issue.', 'wpas' ) );
+		wpas_add_error( 'missing_description', __( 'It is mandatory to provide a description for your issue.', 'awesome-support' ) );
 		wp_redirect( $submit );
 
 		// Break
@@ -109,7 +109,7 @@ function wpas_open_ticket( $data ) {
 		wpas_save_values();
 
 		// Redirect to submit page
-		wpas_add_error( 'unknown_user', __( 'Only registered accounts can submit a ticket. Please register first.', 'wpas' ) );
+		wpas_add_error( 'unknown_user', __( 'Only registered accounts can submit a ticket. Please register first.', 'awesome-support' ) );
 		wp_redirect( $submit );
 
 		exit;
@@ -245,11 +245,18 @@ function wpas_insert_ticket( $data = array(), $post_id = false, $agent_id = fals
 		$agent_id = wpas_find_agent( $ticket_id );
 	}
 
+	/**
+	 * Fire wpas_open_ticket_before_assigned after the post is successfully submitted but before it has been assigned to an agent.
+	 *
+	 * @since 3.2.6
+	 */
+	do_action( 'wpas_open_ticket_before_assigned', $ticket_id, $data );
+
 	/* Assign an agent to the ticket */
 	wpas_assign_ticket( $ticket_id, apply_filters( 'wpas_new_ticket_agent_id', $agent_id, $ticket_id, $agent_id ), false );
 
 	/**
-	 * Fire wpas_after_open_ticket just after the post is successfully submitted.
+	 * Fire wpas_after_open_ticket just after the post is successfully submitted and assigned.
 	 */
 	do_action( 'wpas_open_ticket_after', $ticket_id, $data );
 
@@ -269,10 +276,11 @@ function wpas_insert_ticket( $data = array(), $post_id = false, $agent_id = fals
  * @param string       $ticket_status Ticket status (open or closed)
  * @param array        $args          Additional arguments (see WP_Query)
  * @param string|array $post_status   Ticket state
+ * @param bool         $cache         Whether or not to cache the results
  *
  * @return array               Array of tickets, empty array if no tickets found
  */
-function wpas_get_tickets( $ticket_status = 'open', $args = array(), $post_status = 'any' ) {
+function wpas_get_tickets( $ticket_status = 'open', $args = array(), $post_status = 'any', $cache = false ) {
 
 	$custom_post_status = wpas_get_post_status();
 	$post_status_clean  = array();
@@ -306,11 +314,12 @@ function wpas_get_tickets( $ticket_status = 'open', $args = array(), $post_statu
 	$defaults = array(
 		'post_type'              => 'ticket',
 		'post_status'            => $post_status,
-		'posts_per_page'         => -1,
-		'no_found_rows'          => false,
-		'cache_results'          => true,
-		'update_post_term_cache' => true,
-		'update_post_meta_cache' => true,
+		'posts_per_page'         => - 1,
+		'no_found_rows'          => ! (bool) $cache,
+		'cache_results'          => (bool) $cache,
+		'update_post_term_cache' => (bool) $cache,
+		'update_post_meta_cache' => (bool) $cache,
+		'wpas_query'             => true, // We use this parameter to identify our own queries so that we can remove the author parameter
 	);
 
 	$args  = wp_parse_args( $args, $defaults );
@@ -318,9 +327,10 @@ function wpas_get_tickets( $ticket_status = 'open', $args = array(), $post_statu
 	if ( 'any' !== $ticket_status ) {
 		if ( in_array( $ticket_status, array( 'open', 'closed' ) ) ) {
 			$args['meta_query'][] = array(
-				'key'     => '_wpas_status',
-				'value'   => $ticket_status,
-				'compare' => '='
+					'key'     => '_wpas_status',
+					'value'   => $ticket_status,
+					'compare' => '=',
+					'type'    => 'CHAR'
 			);
 		}
 	}
@@ -374,8 +384,8 @@ function wpas_add_reply( $data, $parent_id = false, $author_id = false ) {
 	 */
 	$defaults = array(
 		'post_content'   => '',
-		'post_name'      => sprintf( __( 'Reply to ticket %s', 'wpas' ), "#$parent_id" ),
-		'post_title'     => sprintf( __( 'Reply to ticket %s', 'wpas' ), "#$parent_id" ),
+		'post_name'      => sprintf( __( 'Reply to ticket %s', 'awesome-support' ), "#$parent_id" ),
+		'post_title'     => sprintf( __( 'Reply to ticket %s', 'awesome-support' ), "#$parent_id" ),
 		'post_status'    => 'unread',
 		'post_type'      => 'ticket_reply',
 		'ping_status'    => 'closed',
@@ -547,8 +557,8 @@ function wpas_insert_reply( $data, $post_id = false ) {
 	}
 
 	$defaults = array(
-		'post_name'      => sprintf( __( 'Reply to ticket %s', 'wpas' ), "#$post_id" ),
-		'post_title'     => sprintf( __( 'Reply to ticket %s', 'wpas' ), "#$post_id" ),
+		'post_name'      => sprintf( __( 'Reply to ticket %s', 'awesome-support' ), "#$post_id" ),
+		'post_title'     => sprintf( __( 'Reply to ticket %s', 'awesome-support' ), "#$post_id" ),
 		'post_content'   => '',
 		'post_status'    => 'unread',
 		'post_type'      => 'ticket_reply',
@@ -683,6 +693,11 @@ function wpas_insert_reply( $data, $post_id = false ) {
 	}
 
 	/**
+	 * Delete the activity transient.
+	 */
+	delete_transient( "wpas_activity_meta_post_$post_id" );
+
+	/**
 	 * Fire wpas_add_reply_after after the reply was successfully added.
 	 */
 	do_action( 'wpas_add_reply_after', $reply_id, $data );
@@ -802,7 +817,7 @@ function wpas_find_agent( $ticket_id = false ) {
 		return apply_filters( 'wpas_find_available_agent', wpas_get_option( 'assignee_default' ), $ticket_id );
 	}
 
-	$users = shuffle_assoc( wpas_get_users( array( 'cap' => 'edit_ticket' ) ) );
+	$users = shuffle_assoc( wpas_get_users( apply_filters( 'wpas_find_agent_get_users_args', array( 'cap' => 'edit_ticket' ) ) ) );
 	$agent = array();
 
 	foreach ( $users as $user ) {
@@ -854,7 +869,7 @@ function wpas_find_agent( $ticket_id = false ) {
 function wpas_assign_ticket( $ticket_id, $agent_id = null, $log = true ) {
 
 	if ( 'ticket' !== get_post_type( $ticket_id ) ) {
-		return new WP_Error( 'incorrect_post_type', __( 'The given post ID is not a ticket', 'wpas' ) );
+		return new WP_Error( 'incorrect_post_type', __( 'The given post ID is not a ticket', 'awesome-support' ) );
 	}
 
 	if ( is_null( $agent_id ) ) {
@@ -862,7 +877,7 @@ function wpas_assign_ticket( $ticket_id, $agent_id = null, $log = true ) {
 	}
 
 	if ( ! user_can( $agent_id, 'edit_ticket' ) ) {
-		return new WP_Error( 'incorrect_agent', __( 'The chosen agent does not have the sufficient capabilities to be assigned a ticket', 'wpas' ) );
+		return new WP_Error( 'incorrect_agent', __( 'The chosen agent does not have the sufficient capabilities to be assigned a ticket', 'awesome-support' ) );
 	}
 
 	/* Get the current agent if any */
@@ -883,7 +898,7 @@ function wpas_assign_ticket( $ticket_id, $agent_id = null, $log = true ) {
 		$log   = array();
 		$log[] = array(
 			'action'   => 'updated',
-			'label'    => __( 'Support Staff', 'wpas' ),
+			'label'    => __( 'Support Staff', 'awesome-support' ),
 			'value'    => $agent_id,
 			'field_id' => 'assignee'
 		);
@@ -897,6 +912,21 @@ function wpas_assign_ticket( $ticket_id, $agent_id = null, $log = true ) {
 	 * since 3.0.2
 	 */
 	do_action( 'wpas_ticket_assigned', $ticket_id, $agent_id );
+
+	// In case this is a ticket transfer from one agent to another, we fire a dedicated action
+	if ( ! empty( $current ) && user_can( (int) $current, 'edit_ticket' ) ) {
+
+		/**
+		 * Fired only if the current assignment is a ticket transfer
+		 *
+		 * @since 3.2.8
+		 *
+		 * @param int $agent_id ID of the new assignee
+		 * @param int $current  ID of the previous assignee
+		 */
+		do_action( 'wpas_ticket_assignee_changed', $agent_id, (int) $current );
+
+	}
 
 	return $update;
 
@@ -914,8 +944,6 @@ function wpas_assign_ticket( $ticket_id, $agent_id = null, $log = true ) {
  */
 function wpas_save_values() {
 
-	global $wpas_session;
-
 	$fields = array();
 
 	foreach ( $_POST as $key => $value ) {
@@ -926,7 +954,7 @@ function wpas_save_values() {
 
 	}
 
-	$wpas_session->add( 'submission_form', $fields );
+	WPAS()->session->add( 'submission_form', $fields );
 
 }
 
@@ -986,7 +1014,7 @@ function wpas_update_ticket_status( $post_id, $status ) {
 	$updated = wp_update_post( $my_post );
 
 	if ( 0 !== intval( $updated ) ) {
-		wpas_log( $post_id, sprintf( __( 'Ticket state changed to %s', 'wpas' ), $custom_status[$status] ) );
+		wpas_log( $post_id, sprintf( __( 'Ticket state changed to %s', 'awesome-support' ), $custom_status[$status] ) );
 	}
 
 	/**
@@ -1020,7 +1048,7 @@ function wpas_close_ticket( $ticket_id, $user_id = 0 ) {
 	}
 
 	if ( ! current_user_can( 'close_ticket' ) ) {
-		wp_die( __( 'You do not have the capacity to close this ticket', 'wpas' ), __( 'Can’t close ticket', 'wpas' ), array( 'back_link' => true ) );
+		wp_die( __( 'You do not have the capacity to close this ticket', 'awesome-support' ), __( 'Can’t close ticket', 'awesome-support' ), array( 'back_link' => true ) );
 	}
 
 	$ticket_id = intval( $ticket_id );
@@ -1035,7 +1063,7 @@ function wpas_close_ticket( $ticket_id, $user_id = 0 ) {
 		$agent->ticket_minus();
 
 		/* Log the action */
-		wpas_log( $ticket_id, __( 'The ticket was closed.', 'wpas' ) );
+		wpas_log( $ticket_id, __( 'The ticket was closed.', 'awesome-support' ) );
 
 		/**
 		 * wpas_after_close_ticket hook
@@ -1094,7 +1122,7 @@ function wpas_reopen_ticket( $ticket_id ) {
 		$update = update_post_meta( intval( $ticket_id ), '_wpas_status', 'open' );
 
 		/* Log the action */
-		wpas_log( $ticket_id, __( 'The ticket was re-opened.', 'wpas' ) );
+		wpas_log( $ticket_id, __( 'The ticket was re-opened.', 'awesome-support' ) );
 
 		/**
 		 * wpas_after_reopen_ticket hook

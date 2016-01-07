@@ -12,7 +12,7 @@
 /**
  * Plugin public class.
  */
-class Awesome_Support {
+class Awesome_Support_Old {
 
 	/**
 	 * Instance of this class.
@@ -44,19 +44,25 @@ class Awesome_Support {
 		 */
 		require_once( WPAS_PATH . 'includes/integrations/loader.php' );
 
-		if ( ! defined( 'DOING_AJAX' ) || ! DOING_AJAX ) {
+		/**
+		 * Load external classes.
+		 */
+		add_action( 'plugins_loaded',                 array( 'WPAS_Ticket_Post_Type', 'get_instance' ),  11, 0 );
+		add_action( 'plugins_loaded',                 array( 'WPAS_Gist',             'get_instance' ),  11, 0 );
+		add_action( 'pre_user_query',                 'wpas_randomize_uers_query',                       10, 1 ); // Alter the user query to randomize the results
 
-			/**
-			 * Load external classes.
-			 */
-			add_action( 'plugins_loaded',                 array( 'WPAS_Ticket_Post_Type', 'get_instance' ),  11, 0 );
-			add_action( 'plugins_loaded',                 array( 'WPAS_Gist',             'get_instance' ),  11, 0 );
-			add_action( 'pre_user_query',                 'wpas_randomize_uers_query',                       10, 1 ); // Alter the user query to randomize the results
+		/* Hook all e-mail notifications */
+		add_action( 'wpas_open_ticket_after',  array( $this, 'notify_confirmation' ), 10, 2 );
+		add_action( 'wpas_ticket_assigned',    array( $this, 'notify_assignment' ),   10, 2 );
+		add_action( 'wpas_add_reply_after',    array( $this, 'notify_reply' ),        10, 2 );
+		add_action( 'wpas_after_close_ticket', array( $this, 'notify_close' ),        10, 3 );
+
+		if ( ! defined( 'DOING_AJAX' ) || ! DOING_AJAX ) {
 
 			/**
 			 * Load internal methods.
 			 */
-			add_action( 'wpmu_new_blog',                  array( $this, 'activate_new_site' ),               10, 0 ); // Activate plugin when new blog is added
+			add_action( 'wpmu_new_blog',                  array( $this, 'activate_new_site' ),               10, 6 ); // Activate plugin when new blog is added
 			add_action( 'plugins_loaded',                 array( $this, 'load_plugin_textdomain' ),          11, 0 ); // Load the plugin textdomain
 			add_action( 'init',                           array( $this, 'init' ),                            11, 0 ); // Register main post type
 			add_action( 'admin_bar_menu',                 array( $this, 'toolbar_tickets_link' ),           999, 1 ); // Add a link to agent's tickets in the toolbar
@@ -70,13 +76,8 @@ class Awesome_Support {
 			add_filter( 'wpas_logs_handles',              array( $this, 'default_log_handles' ),             10, 1 );
 			add_filter( 'authenticate',                   array( $this, 'email_signon' ),                    20, 3 );
 			add_filter( 'plugin_locale',                  array( $this, 'change_plugin_locale' ),            10, 2 );
-			add_filter( 'the_content',                    array( $this, 'make_links_clickable' ),            10, 1 );
-
-			/* Hook all e-mail notifications */
-			add_action( 'wpas_open_ticket_after',  array( $this, 'notify_confirmation' ), 10, 2 );
-			add_action( 'wpas_ticket_assigned',    array( $this, 'notify_assignment' ),   10, 2 );
-			add_action( 'wpas_add_reply_after',    array( $this, 'notify_reply' ),        10, 2 );
-			add_action( 'wpas_after_close_ticket', array( $this, 'notify_close' ),        10, 3 );
+			add_action( 'wp_head',                        array( $this, 'load_admin_bar_style' ) );
+			add_action( 'admin_head',                     array( $this, 'load_admin_bar_style' ) );
 
 			/**
 			 * Modify the ticket single page content.
@@ -179,7 +180,7 @@ class Awesome_Support {
 				wpas_save_values();
 
 				// Redirect to submit page
-				wpas_add_error( 'nonce_verification_failed', __( 'The authenticity of your submission could not be validated. If this ticket is legitimate please try submitting again.', 'wpas' ) );
+				wpas_add_error( 'nonce_verification_failed', __( 'The authenticity of your submission could not be validated. If this ticket is legitimate please try submitting again.', 'awesome-support' ) );
 				wp_redirect( wp_sanitize_redirect( home_url( $_POST['_wp_http_referer'] ) ) );
 				exit;
 			}
@@ -195,7 +196,7 @@ class Awesome_Support {
 				/**
 				 * Redirect to the newly created ticket
 				 */
-				wpas_add_error( 'submission_error', __( 'The ticket couldn\'t be submitted for an unknown reason.', 'wpas' ) );
+				wpas_add_error( 'submission_error', __( 'The ticket couldn\'t be submitted for an unknown reason.', 'awesome-support' ) );
 				wp_redirect( wp_sanitize_redirect( home_url( $_POST['_wp_http_referer'] ) ) );
 				exit;
 
@@ -207,8 +208,7 @@ class Awesome_Support {
 				/**
 				 * Empty the temporary sessions
 				 */
-				global $wpas_session;
-				$wpas_session->clean( 'submission_form' );
+				WPAS()->session->clean( 'submission_form' );
 
 				/**
 				 * Redirect to the newly created ticket
@@ -230,53 +230,62 @@ class Awesome_Support {
 		 */
 		if ( isset( $_POST['wpas_user_reply'] ) ) {
 
-			/**
-			 * Define if the reply can be submitted empty or not.
-			 *
-			 * @since  3.0.0
-			 * @var boolean
-			 */
-			$can_submit_empty = apply_filters( 'wpas_can_reply_be_empty', false );
+			// Get parent ticket ID
+			$parent_id = filter_input( INPUT_POST, 'ticket_id', FILTER_SANITIZE_NUMBER_INT );
 
-			/**
-			 * Get the parent ticket ID.
-			 */
-			$parent_id = intval( $_POST['ticket_id'] );
-
-			if ( empty( $_POST['wpas_user_reply'] ) && false === $can_submit_empty ) {
-				wpas_add_error( 'reply_not_added', __( 'You cannot submit an empty reply.', 'wpas' ) );
-				wpas_redirect( 'reply_not_added', get_permalink( $parent_id ), $parent_id );
-				exit;
-			}
-
-			/* Sanitize the data */
-			$data = array( 'post_content' => wp_kses( $_POST['wpas_user_reply'], wp_kses_allowed_html( 'post' ) ) );
-
-			/* Add the reply */
-			$reply_id = wpas_add_reply( $data, $parent_id );
-
-			/* Possibly close the ticket */
-			if ( isset( $_POST['wpas_close_ticket'] ) && false !== $reply_id ) {
-				wpas_close_ticket( intval( $_POST['ticket_id'] ) );
-			}
-
-			if ( false === $reply_id ) {
-				wpas_add_error( 'reply_added_failed', __( 'Your reply could not be submitted for an unknown reason.', 'wpas' ) );
+			if ( 'ticket' !== get_post_type( $parent_id ) ) {
+				wpas_add_error( 'reply_added_failed', __( 'Something went wrong. We couldn&#039;t identify your ticket. Please try again.', 'awesome-support' ) );
 				wpas_redirect( 'reply_added_failed', get_permalink( $parent_id ) );
 				exit;
-			} else {
+			}
 
-				/**
-				 * Delete the activity transient.
-				 */
-				delete_transient( "wpas_activity_meta_post_$parent_id" );
+			// Define if the ticket must be closed
+			$close = isset( $_POST['wpas_close_ticket'] ) ? true : false;
 
-				wpas_add_notification( 'reply_added', __( 'Your reply has been submitted. Your agent will reply ASAP.', 'wpas' ) );
+			if ( ! empty( $_POST['wpas_user_reply'] ) ) {
 
-				if ( false !== $link = wpas_get_reply_link( $reply_id ) ) {
-					wpas_redirect( 'reply_added', $link );
+				/* Sanitize the data */
+				$data = array( 'post_content' => wp_kses( $_POST['wpas_user_reply'], wp_kses_allowed_html( 'post' ) ) );
+
+				/* Add the reply */
+				$reply_id = wpas_add_reply( $data, $parent_id );
+
+			}
+
+			/* Possibly close the ticket */
+			if ( $close ) {
+
+				wpas_close_ticket( $parent_id );
+
+				// Redirect now if no reply was posted
+				if ( ! isset( $reply_id ) ) {
+					wpas_add_notification( 'ticket_closed', __( 'The ticket was successfully closed', 'awesome-support' ) );
+					wpas_redirect( 'ticket_closed', get_permalink( $parent_id ) );
 					exit;
 				}
+
+			}
+
+			if ( isset( $reply_id ) ) {
+
+				if ( false === $reply_id ) {
+					wpas_add_error( 'reply_added_failed', __( 'Your reply could not be submitted for an unknown reason.', 'awesome-support' ) );
+					wpas_redirect( 'reply_added_failed', get_permalink( $parent_id ) );
+					exit;
+				} else {
+
+					if ( $close ) {
+						wpas_add_notification( 'reply_added_closed', __( 'Thanks for your reply. The ticket is now closed.', 'awesome-support' ) );
+					} else {
+						wpas_add_notification( 'reply_added', __( 'Your reply has been submitted. Your agent will reply ASAP.', 'awesome-support' ) );
+					}
+
+					if ( false !== $link = wpas_get_reply_link( $reply_id ) ) {
+						wpas_redirect( 'reply_added', $link );
+						exit;
+					}
+				}
+
 			}
 		}
 
@@ -365,13 +374,13 @@ class Awesome_Support {
 					$ticket_id = filter_input( INPUT_GET, 'ticket_id', FILTER_SANITIZE_NUMBER_INT );
 
 					if ( ! wpas_can_submit_ticket( $ticket_id ) && ! current_user_can( 'edit_ticket' ) ) {
-						wpas_add_error( 'cannot_reopen_ticket', __( 'You are not allowed to re-open this ticket', 'wpas' ) );
+						wpas_add_error( 'cannot_reopen_ticket', __( 'You are not allowed to re-open this ticket', 'awesome-support' ) );
 						wpas_redirect( 'ticket_reopen', wpas_get_tickets_list_page_url() );
 						exit;
 					}
 
 					wpas_reopen_ticket( $ticket_id );
-					wpas_add_notification( 'ticket_reopen', __( 'The ticket has been successfully re-opened.', 'wpas' ) );
+					wpas_add_notification( 'ticket_reopen', __( 'The ticket has been successfully re-opened.', 'awesome-support' ) );
 					wpas_redirect( 'ticket_reopen', wp_sanitize_redirect( get_permalink( $ticket_id ) ) );
 					exit;
 
@@ -552,10 +561,10 @@ class Awesome_Support {
 		$admin      = get_role( 'administrator' );
 
 		/* Add the new roles */
-		$manager = add_role( 'wpas_manager',         __( 'Support Supervisor', 'wpas' ), $editor->capabilities );     // Has full capabilities for the plugin in addition to editor capabilities
-		$tech    = add_role( 'wpas_support_manager', __( 'Support Manager', 'wpas' ),    $subscriber->capabilities ); // Has full capabilities for the plugin only
-		$agent   = add_role( 'wpas_agent',           __( 'Support Agent', 'wpas' ),      $author->capabilities );     // Has limited capabilities for the plugin in addition to author's capabilities
-		$client  = add_role( 'wpas_user',            __( 'Support User', 'wpas' ),       $subscriber->capabilities ); // Has posting & replying capapbilities for the plugin in addition to subscriber's capabilities
+		$manager = add_role( 'wpas_manager',         __( 'Support Supervisor', 'awesome-support' ), $editor->capabilities );     // Has full capabilities for the plugin in addition to editor capabilities
+		$tech    = add_role( 'wpas_support_manager', __( 'Support Manager', 'awesome-support' ),    $subscriber->capabilities ); // Has full capabilities for the plugin only
+		$agent   = add_role( 'wpas_agent',           __( 'Support Agent', 'awesome-support' ),      $author->capabilities );     // Has limited capabilities for the plugin in addition to author's capabilities
+		$client  = add_role( 'wpas_user',            __( 'Support User', 'awesome-support' ),       $subscriber->capabilities ); // Has posting & replying capapbilities for the plugin in addition to subscriber's capabilities
 
 		/**
 		 * Add full capacities to admin roles
@@ -612,13 +621,13 @@ class Awesome_Support {
 
 		$lang_dir  = WPAS_ROOT . 'languages/';
 		$land_path = WPAS_PATH . 'languages/';
-		$locale    = apply_filters( 'plugin_locale', get_locale(), 'wpas' );
-		$mofile    = "wpas-$locale.mo";
+		$locale    = apply_filters( 'plugin_locale', get_locale(), 'awesome-support' );
+		$mofile    = "awesome-support-$locale.mo";
 
 		if ( file_exists( $land_path . $mofile ) ) {
-			$language = load_textdomain( 'wpas', $land_path . $mofile );
+			$language = load_textdomain( 'awesome-support', $land_path . $mofile );
 		} else {
-			$language = load_plugin_textdomain( 'wpas', false, $lang_dir );
+			$language = load_plugin_textdomain( 'awesome-support', false, $lang_dir );
 		}
 
 		return $language;
@@ -718,19 +727,36 @@ class Awesome_Support {
 	 */
 	protected function get_javascript_object() {
 
+		global $post;
+
+		if ( ! isset( $post ) || ! is_object( $post ) || ! is_a( $post, 'WP_Post' ) ) {
+			return;
+		}
+
 		$upload_max_files = (int) wpas_get_option( 'attachments_max' );
 		$upload_max_size  = (int) wpas_get_option( 'filesize_max' );
+
+		// Editors translations
+		if ( in_array( $post->ID, wpas_get_submission_pages() ) ) {
+			$empty_editor = _x( "You can't submit an empty ticket", 'JavaScript validation error message', 'awesome-support' );
+		} else {
+			$empty_editor = _x( "You can't submit an empty reply", 'JavaScript validation error message', 'awesome-support' );
+		}
 
 		$object = array(
 			'ajaxurl'                => admin_url( 'admin-ajax.php' ),
 			'emailCheck'             => true === boolval( wpas_get_option( 'enable_mail_check', false ) ) ? 'true' : 'false',
 			'fileUploadMax'          => $upload_max_files,
 			'fileUploadSize'         => $upload_max_size * 1048576, // We base our calculation on binary prefixes
-			'fileUploadMaxError'     => __( sprintf( 'You can only upload a maximum of %d files', $upload_max_files ), 'wpas' ),
+			'fileUploadMaxError'     => __( sprintf( 'You can only upload a maximum of %d files', $upload_max_files ), 'awesome-support' ),
 			'fileUploadMaxSizeError' => array(
-				__( 'The following file(s) are too big to be uploaded:', 'wpas' ),
-				sprintf( __( 'The maximum file size allowed for one file is %d MB', 'wpas' ), $upload_max_size )
+				__( 'The following file(s) are too big to be uploaded:', 'awesome-support' ),
+				sprintf( __( 'The maximum file size allowed for one file is %d MB', 'awesome-support' ), $upload_max_size )
 			),
+			'translations' => array(
+				'emptyEditor' => $empty_editor,
+				'onSubmit'    => _x( 'Submitting...', 'ticket submission button text while submitting', 'awesome-support' ),
+			)
 		);
 
 		return $object;
@@ -888,7 +914,7 @@ class Awesome_Support {
 	public function terms_and_conditions_checkbox() {
 		if ( wpas_get_option( 'terms_conditions', false ) ): ?>
 			<div class="wpas-checkbox">
-				<label><input type="checkbox" name="terms" required> <?php printf( __( 'I accept the %sterms and conditions%s', 'wpas' ), '<a href="#wpas-modalterms" class="wpas-modal-trigger">', '</a>' ); ?></label>
+				<label><input type="checkbox" name="terms" required> <?php printf( __( 'I accept the %sterms and conditions%s', 'awesome-support' ), '<a href="#wpas-modalterms" class="wpas-modal-trigger">', '</a>' ); ?></label>
 			</div>
 		<?php endif;
 	}
@@ -902,25 +928,62 @@ class Awesome_Support {
 	 */
 	public function toolbar_tickets_link( $wp_admin_bar ) {
 
-		if ( !current_user_can( 'edit_ticket' ) ) {
+		if ( ! current_user_can( 'edit_ticket' ) ) {
 			return;
 		}
 
-		$hide = boolval( wpas_get_option( 'hide_closed' ) );
-		$args = array( 'post_type' => 'ticket' );
+		$hide          = (bool) wpas_get_option( 'hide_closed' );
+		$agent_see_all = (bool) wpas_get_option( 'agent_see_all' );
+		$admin_see_all = (bool) wpas_get_option( 'admin_see_all' );
+		$args          = array( 'post_type' => 'ticket' );
+		$tickets_count = 0;
+
+		// In case the current user can only see his own tickets
+		if ( current_user_can( 'administrator' ) && false === $admin_see_all || ! current_user_can( 'administrator' ) && false === $agent_see_all ) {
+
+			global $current_user;
+
+			$agent         = new WPAS_Agent( $current_user->ID );
+			$tickets_count = $agent->open_tickets();
+
+		} else {
+			$tickets_count = count( wpas_get_tickets( 'open', $args ) );
+		}
 
 		if ( true === $hide ) {
 			$args['wpas_status'] = 'open';
 		}
 
-		$args = array(
-			'id'    => 'wpas_tickets',
-			'title' => __( 'My Tickets', 'wpas' ),
-			'href'  => add_query_arg( $args, admin_url( 'edit.php' ) ),
-			'meta'  => array( 'class' => 'wpas-my-tickets' )
+		$node = array(
+			'id'     => 'wpas_tickets',
+			'parent' => null,
+			'group'  => null,
+			'title'  => '<span class="ab-icon"></span> ' . $tickets_count,
+			'href'   => add_query_arg( $args, admin_url( 'edit.php' ) ),
+			'meta'   => array(
+				'target' => '_self',
+				'title'  => esc_html__( 'Open tickets assigned to you', 'awesome-support' ),
+				'class'  => 'wpas-my-tickets',
+			),
 		);
 
-		$wp_admin_bar->add_node( $args );
+		$wp_admin_bar->add_node( $node );
+	}
+
+	/**
+	 * Load the one line style for the admin bar icon
+	 *
+	 * @since 3.2.6
+	 * @return void
+	 */
+	public function load_admin_bar_style() {
+
+		if ( ! is_user_logged_in() || ! current_user_can( 'edit_ticket' ) ) {
+			return;
+		}
+
+		echo '<style>#wpadminbar #wp-admin-bar-wpas_tickets .ab-icon:before { content: \'\\f468\'; top: 2px; }</style>';
+
 	}
 
 	/**
@@ -959,7 +1022,7 @@ class Awesome_Support {
 			$check = json_decode( $check );
 
 			if ( is_object( $check ) && isset( $check->did_you_mean ) && !is_null( $check->did_you_mean ) ) {
-				printf( __( 'Did you mean %s', 'wpas' ), "<strong>{$check->did_you_mean}</strong>?" );
+				printf( __( 'Did you mean %s', 'awesome-support' ), "<strong>{$check->did_you_mean}</strong>?" );
 				die();
 			}
 
@@ -1004,36 +1067,6 @@ class Awesome_Support {
 		}
 
 		return $query;
-
-	}
-
-	/**
-	 * Make all tickets and replies URLs clickable
-	 *
-	 * @since 3.2.2
-	 *
-	 * @param string $content Post content
-	 *
-	 * @return string
-	 */
-	public function make_links_clickable( $content ) {
-
-		// We're not using $post_id here because we want to apply the filter to the entire "page", which includes ticket replies
-		if ( is_admin() && isset( $_GET['post'] ) && 'ticket' === get_post_type( filter_input( INPUT_GET, 'post', FILTER_SANITIZE_NUMBER_INT ) ) ) {
-			return make_clickable( $content );
-		}
-
-		global $post;
-
-		if ( ! isset( $post ) || empty( $post ) ) {
-			return $content;
-		}
-
-		if ( in_array( get_post_type( $post->ID ), array( 'ticket', 'ticket_reply' ) ) ) {
-			$content = make_clickable( $content );
-		}
-
-		return $content;
 
 	}
 

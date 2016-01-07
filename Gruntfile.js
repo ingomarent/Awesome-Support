@@ -180,16 +180,16 @@ module.exports = function (grunt) {
 					exclude: ['assets/.*', 'node_modules/.*', 'vendor/.*', 'tests/.*', 'includes/admin/views/system-status.php'],
 					mainFile: 'awesome-support.php',
 					potComments: 'N2Clic Limited',
-					potFilename: 'wpas.pot',
+					potFilename: 'awesome-support.pot',
 					potHeaders: {
 						poedit: true,
-						'x-poedit-keywordslist': true
+						'x-poedit-keywordslist': true,
+						'report-msgid-bugs-to': 'https://github.com/ThemeAvenue/Awesome-Support/issues',
+						'last-translator': 'ThemeAvenue (https://themeavenue.net/)',
+						'language-team': 'ThemeAvenue <hello@themeavenue.net>',
+						'language': 'en_US'
 					},
 					processPot: function (pot, options) {
-						pot.headers['report-msgid-bugs-to'] = 'https://getawesomesupport.com.com/';
-						pot.headers['last-translator'] = 'ThemeAvenue (https://themeavenue.net/)';
-						pot.headers['language-team'] = 'ThemeAvenue <hello@themeavenue.net>';
-						pot.headers['language'] = 'en_US';
 						var translation,
 							excluded_meta = [
 								'Plugin Name of the plugin/theme',
@@ -272,8 +272,8 @@ module.exports = function (grunt) {
 	grunt.registerTask('txpush', ['makepot', 'exec:txpush']);
 
 	grunt.registerTask('release', ['composer:install', 'txpull', 'compress']);
-	grunt.registerTask('release_patch', ['version:patch', 'release']);
-	grunt.registerTask('release_minor', ['version:minor', 'release']);
-	grunt.registerTask('release_major', ['version:major', 'release']);
+	grunt.registerTask('release_patch', ['version::patch', 'release']);
+	grunt.registerTask('release_minor', ['version::minor', 'release']);
+	grunt.registerTask('release_major', ['version::major', 'release']);
 
 };

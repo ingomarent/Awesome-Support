@@ -14,6 +14,31 @@
 
 	$(function () {
 
+		/**
+		 * Automatically Link URLs, Email Addresses, Phone Numbers, etc.
+		 * https://github.com/gregjacobs/Autolinker.js
+		 */
+		if ($('.wpas-reply-content').length) {
+			$('.wpas-reply-content').each(function (index, el) {
+				el.innerHTML = Autolinker.link(el.innerHTML);
+			});
+		}
+
+		/*
+		Closing Ticket Function
+		 */
+		var replyForm = $('#wpas-new-reply');
+		var replyInput = $('textarea[name="wpas_user_reply"]');
+		var replyClose = $('input[name="wpas_close_ticket"]');
+
+		replyForm.on('change', replyClose, function () {
+			if (replyClose.is(':checked')) {
+				replyInput.prop('required', false);
+			} else {
+				replyInput.prop('required', true);
+			}
+		});
+
 		/*
 		Check if TinyMCE is empty
 		http://codeblow.com/questions/method-to-check-whether-tinymce-is-active-in-wordpress/
@@ -24,13 +49,15 @@
 			$('.wpas-form').submit(function (event) {
 				var submitBtn = $('[type="submit"]', $(this));
 				var editorContent = tinyMCE.activeEditor.getContent();
-				if (editorContent === '' || editorContent === null) {
+				if (!$('input[name="wpas_close_ticket"]:checked').length && (editorContent === '' || editorContent === null)) {
 
 					/* Highlight the active editor */
 					$(tinyMCE.activeEditor.getBody()).css('background-color', '#ffeeee');
 
 					/* Alert the user */
-					alert('You can\'t submit an empty ticket reply.');
+					alert(wpas.translations.emptyEditor);
+
+					/* Restore the editor background color */
 					$(tinyMCE.activeEditor.getBody()).css('background-color', '');
 
 					/* Focus on editor */
@@ -38,7 +65,7 @@
 
 					return false;
 				} else {
-					submitBtn.prop('disabled', true).text(submitBtn.data('onsubmit'));
+					submitBtn.prop('disabled', true).text(wpas.translations.onSubmit);
 				}
 			});
 
@@ -46,7 +73,8 @@
 
 			$('.wpas-form').submit(function (event) {
 				var submitBtn = $('[type="submit"]', $(this));
-				submitBtn.prop('disabled', true).text(submitBtn.data('onsubmit'));
+				var submitText = submitBtn.attr('data-onsubmit') ? submitBtn.attr('data-onsubmit') : wpas.translations.onSubmit;
+				submitBtn.prop('disabled', true).text(submitText);
 			});
 
 		}

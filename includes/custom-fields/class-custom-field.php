@@ -140,6 +140,28 @@ class WPAS_Custom_Field {
 	}
 
 	/**
+	 * Get the value of a field argument
+	 *
+	 * @since 3.2.10
+	 *
+	 * @param string $arg     Argument ID
+	 * @param mixed  $default Default value ot return
+	 *
+	 * @return mixed
+	 */
+	public function get_field_arg( $arg, $default = '' ) {
+
+		$value = $default;
+
+		if ( array_key_exists( $arg, $this->field_args ) ) {
+			$value = $this->field_args[ $arg ];
+		}
+
+		return $value;
+
+	}
+
+	/**
 	 * Get the field class name.
 	 *
 	 * @since 3.2.0
@@ -293,13 +315,11 @@ class WPAS_Custom_Field {
 
 		if ( empty( $value ) ) {
 
-			global $wpas_session;
-
 			if ( isset( $_GET[$this->get_field_id()] ) ) {
 				$value = is_array( $_GET[$this->get_field_id()] ) ? filter_input( INPUT_GET, $this->get_field_id(), FILTER_SANITIZE_STRING, FILTER_REQUIRE_ARRAY ) : filter_input( INPUT_GET, $this->get_field_id(), FILTER_SANITIZE_STRING );
 			}
 
-			$fields = $wpas_session->get( 'submission_form' );
+			$fields = WPAS()->session->get( 'submission_form' );
 
 			if ( isset( $fields ) && is_array( $fields ) && array_key_exists( $this->get_field_id(), $fields ) ) {
 				$value = $this->get_sanitized_value( $fields[$this->get_field_id()] );
@@ -400,7 +420,7 @@ class WPAS_Custom_Field {
 				}
 
 			} else {
-				$field  = '<!-- ' . __( 'The custom field class does not contain the mandatory method "display"', 'wpas' ) . ' -->';
+				$field  = '<!-- ' . __( 'The custom field class does not contain the mandatory method "display"', 'awesome-support' ) . ' -->';
 				$error = true;
 			}
 
@@ -408,11 +428,11 @@ class WPAS_Custom_Field {
 
 		/* In case the field type / callback function does not exist */
 		else {
-			$field  = '<!-- ' . __( 'The type of custom field you are trying to use does not exist', 'wpas' ) . ' -->';
+			$field  = '<!-- ' . __( 'The type of custom field you are trying to use does not exist', 'awesome-support' ) . ' -->';
 			$error = true;
 		}
 
-		return false === $error ? $this->process_field_markup( apply_filters( 'wpas_cf_field_markup', $field, $this->populate() ) ) : $field;
+		return false === $error ? $this->process_field_markup( apply_filters( 'wpas_cf_field_markup', $field, $this->populate(), $this->field ) ) : $field;
 
 	}
 

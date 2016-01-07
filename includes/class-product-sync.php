@@ -479,8 +479,8 @@ class WPAS_Product_Sync {
 				'ignore_sticky_posts'    => false,
 				'posts_per_page'         => -1,
 				'perm'                   => 'readable',
-				'no_found_rows'          => false,
-				'cache_results'          => true,
+				'no_found_rows'          => true,
+				'cache_results'          => false,
 				'update_post_term_cache' => false,
 				'update_post_meta_cache' => false,
 			);
@@ -569,15 +569,12 @@ class WPAS_Product_Sync {
 		/* Get the post data */
 		$post = get_post( $post_id );
 
-		/* Set the new term array */
-		$new_term = (array) $term;
-
 		/* Set the new values */
-		$new_term['name']        = $post->post_title;
-		$new_term['slug']        = $post->post_name;
-		$new_term['description'] = wp_trim_words( $post->post_content, 55, ' [...]' );
+		$term->name        = $post->post_title;
+		$term->slug        = $post->post_name;
+		$term->description = wp_trim_words( $post->post_content, 55, ' [...]' );
 
-		return (object) $new_term;
+		return $term;
 
 	}
 
@@ -763,7 +760,7 @@ class WPAS_Product_Sync {
 	 */
 	public function notice_locked_tax() {
 
-		$message = apply_filters( 'wpas_taxonomy_locked_msg', sprintf( __( 'You cannot edit this term from here because it is linked to a post (of the %s post type). Please edit the post directly instead.', 'wpas' ), "<code>$this->post_type</code>" ) );
+		$message = apply_filters( 'wpas_taxonomy_locked_msg', sprintf( __( 'You cannot edit this term from here because it is linked to a post (of the %s post type). Please edit the post directly instead.', 'awesome-support' ), "<code>$this->post_type</code>" ) );
 
 		if ( $this->is_tax_screen() && $this->is_synced_term() ) { ?>
 			<div class="error">
@@ -785,10 +782,10 @@ class WPAS_Product_Sync {
 	 */
 	public function lock_taxonomy() {
 
-		$message = apply_filters( 'wpas_taxonomy_locked_msg', sprintf( __( 'You cannot edit this term from here because it is linked to a post (of the %s post type). Please edit the post directly instead.', 'wpas' ), "<code>$this->post_type</code>" ) );
+		$message = apply_filters( 'wpas_taxonomy_locked_msg', sprintf( __( 'You cannot edit this term from here because it is linked to a post (of the %s post type). Please edit the post directly instead.', 'awesome-support' ), "<code>$this->post_type</code>" ) );
 
 		if ( $this->is_tax_screen() && $this->is_synced_term() ) {
-			wp_die( $message, __( 'Term Locked', 'wpas' ), array( 'back_link' => true ) );
+			wp_die( $message, __( 'Term Locked', 'awesome-support' ), array( 'back_link' => true ) );
 		}
 
 	}
@@ -809,8 +806,8 @@ class WPAS_Product_Sync {
 			'ignore_sticky_posts'    => false,
 			'posts_per_page'         => -1,
 			'perm'                   => 'readable',
-			'no_found_rows'          => false,
-			'cache_results'          => true,
+			'no_found_rows'          => true,
+			'cache_results'          => false,
 			'update_post_term_cache' => false,
 			'update_post_meta_cache' => false,
 		);
@@ -848,12 +845,12 @@ class WPAS_Product_Sync {
 	 */
 	public function add_resync_tool() { ?>
 		<tr>
-			<td class="row-title"><label for="tablecell"><?php _e( 'Re-Synchronize Products', 'wpas' ); ?></label></td>
+			<td class="row-title"><label for="tablecell"><?php _e( 'Re-Synchronize Products', 'awesome-support' ); ?></label></td>
 			<td>
 				<a href="<?php echo wpas_tool_link( 'resync_products', array( 'pt' => $this->post_type ) ); ?>"
-				   class="button-secondary"><?php _e( 'Resync', 'wpas' ); ?></a>
+				   class="button-secondary"><?php _e( 'Resync', 'awesome-support' ); ?></a>
 				<span
-					class="wpas-system-tools-desc"><?php _e( 'Re-synchronize all products from your e-commerce plugin.', 'wpas' ); ?></span>
+					class="wpas-system-tools-desc"><?php _e( 'Re-synchronize all products from your e-commerce plugin.', 'awesome-support' ); ?></span>
 			</td>
 		</tr>
 	<?php }
@@ -865,12 +862,12 @@ class WPAS_Product_Sync {
 	 */
 	public function add_delete_tool() { ?>
 		<tr>
-			<td class="row-title"><label for="tablecell"><?php _e( 'Delete Products', 'wpas' ); ?></label></td>
+			<td class="row-title"><label for="tablecell"><?php _e( 'Delete Products', 'awesome-support' ); ?></label></td>
 			<td>
 				<a href="<?php echo wpas_tool_link( 'delete_products', array( 'pt' => $this->post_type ) ); ?>"
-				   class="button-secondary"><?php _e( 'Delete', 'wpas' ); ?></a>
+				   class="button-secondary"><?php _e( 'Delete', 'awesome-support' ); ?></a>
 				<span
-					class="wpas-system-tools-desc"><?php _e( 'Delete all products synchronized from your e-commerce plugin.', 'wpas' ); ?></span>
+					class="wpas-system-tools-desc"><?php _e( 'Delete all products synchronized from your e-commerce plugin.', 'awesome-support' ); ?></span>
 			</td>
 		</tr>
 	<?php }

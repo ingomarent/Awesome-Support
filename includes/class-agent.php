@@ -9,6 +9,26 @@
  * @copyright 2014 ThemeAvenue
  */
 
+add_action( 'wpas_ticket_assignee_changed', 'wpas_update_ticket_count_on_transfer', 10, 2 );
+/**
+ * Update the open agent tickets count when a ticket is transferred from one agent to another
+ *
+ * We do not need to add a new ticket to the new agent because it is automatically done in wpas_assign_ticket()
+ *
+ * @since 3.2.8
+ *
+ * @param int $agent_id          ID of the current ticket assignee
+ * @param int $previous_agent_id ID of the previous assignee
+ *
+ * @return void
+ */
+function wpas_update_ticket_count_on_transfer( $agent_id, $previous_agent_id ) {
+
+	$agent_prev = new WPAS_Agent( $previous_agent_id );
+	$agent_prev->ticket_minus();
+
+}
+
 class WPAS_Agent {
 
 	/**
@@ -53,11 +73,11 @@ class WPAS_Agent {
 	public function is_agent() {
 
 		if ( false === $this->exists() ) {
-			return new WP_Error( 'user_not_exists', sprintf( __( 'The user with ID %d does not exist', 'wpas' ), $this->agent_id ) );
+			return new WP_Error( 'user_not_exists', sprintf( __( 'The user with ID %d does not exist', 'awesome-support' ), $this->agent_id ) );
 		}
 
 		if ( false === $this->user->has_cap( 'edit_ticket' ) ) {
-			return new WP_Error( 'user_not_agent', __( 'The user exists but is not a support agent', 'wpas' ) );
+			return new WP_Error( 'user_not_agent', __( 'The user exists but is not a support agent', 'awesome-support' ) );
 		}
 
 		return true;
@@ -144,33 +164,17 @@ class WPAS_Agent {
 	 */
 	public function get_open_tickets() {
 
-		$posts_args = array(
-			'post_type'              => 'ticket',
-			'post_status'            => 'any',
-			'posts_per_page'         => - 1,
-			'no_found_rows'          => true,
-			'cache_results'          => false,
-			'update_post_term_cache' => false,
-			'update_post_meta_cache' => false,
-			'meta_query'             => array(
-				array(
-					'key'     => '_wpas_status',
-					'value'   => 'open',
-					'type'    => 'CHAR',
-					'compare' => '='
-				),
-				array(
-					'key'     => '_wpas_assignee',
-					'value'   => $this->agent_id,
-					'type'    => 'NUMERIC',
-					'compare' => '='
-				),
-			)
+		$args                 = array();
+		$args['meta_query'][] = array(
+				'key'     => '_wpas_assignee',
+				'value'   => $this->agent_id,
+				'compare' => '=',
+				'type'    => 'NUMERIC',
 		);
 
-		$open_tickets = new WP_Query( $posts_args );
+		$open_tickets = wpas_get_tickets( 'open', $args );
 
-		return $open_tickets->posts;
+		return $open_tickets;
 
 	}
 
